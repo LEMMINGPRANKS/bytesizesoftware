@@ -107,22 +107,28 @@ async function main() {
     input.requestLock();
   });
 
+  let recipeSig = "";
   function renderRecipes() {
     const list = $("#recipe-list");
     list.innerHTML = "";
     for (const r of RECIPES) {
       const div = document.createElement("div");
       div.className = "recipe";
-      const cost = r.in.map((c) => `${c.count} ${BLOCKS[c.id].name}`).join(" + ");
+      const cost = r.in.map((c) => `${c.count} ${BLOCKS[c.id].name} (have ${inv.count(c.id)})`).join(" + ");
       const ok = canCraft(inv, r);
       div.innerHTML = `<div><div>${r.name}</div><div class="cost">${cost}</div></div>`;
       const btn = document.createElement("button");
       btn.textContent = "Craft";
       btn.disabled = !ok;
-      btn.onclick = () => { if (craft(inv, r)) { hud.refresh(); renderRecipes(); } };
+      btn.onclick = () => { if (craft(inv, r)) { hud.refresh(); refreshCraftIfOpen(); } };
       div.appendChild(btn);
       list.appendChild(div);
     }
+  }
+  function refreshCraftIfOpen() {
+    if (!craftOpen) return;
+    const sig = RECIPES.map(r => r.in.map(c => c.id + ":" + inv.count(c.id)).join(",")).join("|");
+    if (sig !== recipeSig) { recipeSig = sig; renderRecipes(); }
   }
 
   // ---- Loop ----
@@ -135,7 +141,8 @@ async function main() {
     craftPanel.classList.toggle("hidden", !craftOpen);
     if (craftOpen) {
       document.exitPointerLock?.();
-      renderRecipes();
+      recipeSig = "";
+      refreshCraftIfOpen();
     } else {
       input.requestLock();
     }
@@ -150,7 +157,7 @@ async function main() {
     if (input.justPressed.has("KeyF")) player.toggleFly();
 
     if (craftOpen) {
-      renderRecipes();
+      refreshCraftIfOpen();
       input.endFrame();
       renderer.render(scene, camera);
       return;
