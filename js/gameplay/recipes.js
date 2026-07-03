@@ -17,6 +17,7 @@ export const RECIPES = [
   { out: [B.GOLD_BLOCK, 1], in: [{ id: B.GOLD_ORE, count: 9 }],       name: "Gold Block" },
   { out: [B.DIAMOND_BLOCK, 1], in: [{ id: B.DIAMOND_ORE, count: 9 }], name: "Diamond Block" },
   { out: [B.PLATINUM_BLOCK, 1], in: [{ id: B.PLATINUM_ORE, count: 9 }], name: "Platinum Block" },
+  { out: [B.COOKED_BEEF, 1], in: [{ id: B.RAW_BEEF, count: 1 }], name: "Cook Raw Beef (needs fireplace)", needsFire: true },
 ];
 
 // Tool tier hints (informational): wood < stone < iron < gold < diamond < platinum.

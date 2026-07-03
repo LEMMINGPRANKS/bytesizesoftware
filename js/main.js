@@ -12,6 +12,7 @@ import { HUD } from "./ui/hud.js";
 import { RECIPES } from "./gameplay/recipes.js";
 import { canCraft, craft } from "./gameplay/crafting.js";
 import { TreeSystem } from "./gameplay/trees.js";
+import { MobSystem } from "./gameplay/mobs.js";
 import { B, BLOCKS, isSolid, isLiquid } from "./world/blocks.js";
 
 const $ = (s) => document.querySelector(s);
@@ -34,8 +35,12 @@ async function main() {
   const input = new Input(canvas);
   const mining = new MiningController(world, scene, onBreak);
   const trees = new TreeSystem(world);
+  const mobs = new MobSystem(world, scene);
   const inv = new Inventory();
   const hud = new HUD(inv);
+  let hunger = 20;            // 0..20
+  let lastHungerTick = performance.now();
+  let attackCooldown = 0;
 
   // Starter inventory: a few planks to bootstrap.
   inv.add(B.PLANKS, 8);
@@ -48,6 +53,7 @@ async function main() {
   player.spawn();
   world.update(player.pos.x, player.pos.z);
   hud.refresh();
+  hud.setHunger(hunger);
   setStatus("Ready — click Play!");
 
   function onBreak(kind, id, x, y, z) {
@@ -78,6 +84,8 @@ async function main() {
   function placeBlock() {
     const sel = inv.selected();
     if (sel === null) return;
+    // If selected item is food, eat instead of placing.
+    if (BLOCKS[sel]?.food) { eat(sel); return; }
     const t = mining.acquire(player);
     if (!t) return;
     const px = t.x + t.face[0], py = t.y + t.face[1], pz = t.z + t.face[2];
@@ -91,6 +99,43 @@ async function main() {
     world.setBlock(px, py, pz, sel);
     inv.remove(sel, 1);
     hud.refresh();
+  }
+
+  function eat(id) {
+    const def = BLOCKS[id];
+    if (!def?.food) return;
+    if (hunger >= 20) return; // full
+    if (!inv.remove(id, 1)) return;
+    hunger = Math.min(20, hunger + def.food);
+    hud.setHunger(hunger);
+    hud.refresh();
+  }
+
+  function nearFireplace() {
+    const px = Math.floor(player.pos.x), py = Math.floor(player.pos.y + 1), pz = Math.floor(player.pos.z);
+    for (let dx = -2; dx <= 2; dx++)
+      for (let dy = -2; dy <= 2; dy++)
+        for (let dz = -2; dz <= 2; dz++)
+          if (world.getBlock(px + dx, py + dy, pz + dz) === B.FIREPLACE) return true;
+    return false;
+  }
+
+  function attack() {
+    if (attackCooldown > 0) return;
+    attackCooldown = 0.4;
+    const origin = player.eyePos();
+    const dir = player.lookDir();
+    const cow = mobs.raycast(origin, dir, CONFIG.mining.range + 1);
+    if (cow) {
+      const wasAlive = cow.alive;
+      cow.hit(4, player.pos);
+      if (wasAlive && !cow.alive) {
+        // Cow just died — drop 2–3 raw beef.
+        const drop = 2 + (Math.random() * 2 | 0);
+        inv.add(B.RAW_BEEF, drop);
+        hud.refresh();
+      }
+    }
   }
 
   // ---- UI wiring ----
@@ -128,23 +173,25 @@ async function main() {
   function renderRecipes() {
     const list = $("#recipe-list");
     list.innerHTML = "";
+    const ctx = { nearFire: nearFireplace() };
     for (const r of RECIPES) {
       const div = document.createElement("div");
       div.className = "recipe";
       const cost = r.in.map((c) => `${c.count} ${BLOCKS[c.id].name} (have ${inv.count(c.id)})`).join(" + ");
-      const ok = canCraft(inv, r);
+      const ok = canCraft(inv, r, ctx);
       div.innerHTML = `<div><div>${r.name}</div><div class="cost">${cost}</div></div>`;
       const btn = document.createElement("button");
       btn.textContent = "Craft";
       btn.disabled = !ok;
-      btn.onclick = () => { if (craft(inv, r)) { hud.refresh(); refreshCraftIfOpen(); } };
+      btn.onclick = () => { if (craft(inv, r, ctx)) { hud.refresh(); refreshCraftIfOpen(); } };
       div.appendChild(btn);
       list.appendChild(div);
     }
   }
   function refreshCraftIfOpen() {
     if (!craftOpen) return;
-    const sig = RECIPES.map(r => r.in.map(c => c.id + ":" + inv.count(c.id)).join(",")).join("|");
+    const ctx = { nearFire: nearFireplace() };
+    const sig = RECIPES.map(r => r.in.map(c => c.id + ":" + inv.count(c.id)).join(",") + (r.needsFire ? ";f:" + ctx.nearFire : "")).join("|");
     if (sig !== recipeSig) { recipeSig = sig; renderRecipes(); }
   }
 
@@ -187,11 +234,30 @@ async function main() {
       return;
     }
 
+    attackCooldown = Math.max(0, attackCooldown - dt);
+
     player.update(dt, input);
 
-    // Mining: hold left mouse.
-    const target = mining.update(dt, player, input.mouseDown[0]);
+    // Left-click: attack cow if aimed at one, otherwise mine.
+    if (input.mouseJust[0]) attack();
+    const miningAim = !mobs.raycast(player.eyePos(), player.lookDir(), CONFIG.mining.range + 1);
+    const target = mining.update(dt, player, input.mouseDown[0] && miningAim);
     if (input.mouseJust[2] || input.justPressed.has("KeyQ")) placeBlock();
+
+    // Mobs
+    mobs.update(dt, player.pos);
+
+    // Hunger tick
+    const nowMs = performance.now();
+    if (nowMs - lastHungerTick > 6000) {       // every 6s
+      lastHungerTick = nowMs;
+      hunger = Math.max(0, hunger - 0.5);
+      hud.setHunger(hunger);
+      if (hunger <= 0) {
+        // Starving: nudge the player upward less jump and slow them.
+        // Light penalty only — no death for now.
+      }
+    }
     if (input.mouseJust[0] && target && !BLOCKS[world.getBlock(target.x, target.y, target.z)]?.treeHealth) {
       // single-tap also fine; the hold loop does the work
     }

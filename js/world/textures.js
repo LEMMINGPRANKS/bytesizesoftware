@@ -186,6 +186,18 @@ function drawTexture(id, face) {
       break;
     }
     case B.BEDROCK: fillNoise(ctx, base, 10); specks(ctx, "#000", 20); break;
+    case B.RAW_BEEF: {
+      fillNoise(ctx, base, 22);
+      specks(ctx, "#f0c0c0", 10); // fat
+      specks(ctx, "#7a3a3a", 6);  // dark patches
+      break;
+    }
+    case B.COOKED_BEEF: {
+      fillNoise(ctx, base, 18);
+      specks(ctx, "#5a3010", 6);
+      specks(ctx, "#a8703a", 4);
+      break;
+    }
     case B.WATER: {
       ctx.clearRect(0, 0, SIZE, SIZE);
       ctx.fillStyle = "rgba(58,106,204,0.7)";

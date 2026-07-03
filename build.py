@@ -24,6 +24,8 @@ MODULES = [
     "js/gameplay/recipes.js",
     "js/gameplay/crafting.js",
     "js/gameplay/trees.js",
+    "js/entities/cow.js",
+    "js/gameplay/mobs.js",
     "js/ui/hud.js",
     "js/main.js",
 ]

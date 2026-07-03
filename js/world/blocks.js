@@ -6,6 +6,7 @@ export const B = {
   COBBLE: 16, GLASS: 17, BRICK: 18, ARCH: 19, TORCH: 20,
   IRON_BLOCK: 21, GOLD_BLOCK: 22, DIAMOND_BLOCK: 23, PLATINUM_BLOCK: 24,
   BEDROCK: 25, WATER: 26,
+  RAW_BEEF: 27, COOKED_BEEF: 28,
 };
 
 export const BLOCKS = {
@@ -36,6 +37,8 @@ export const BLOCKS = {
   [B.PLATINUM_BLOCK]: { name: "platinum_block", solid: true, hardness: 5.0, color: "#f0f0f8" },
   [B.BEDROCK]: { name: "bedrock", solid: true, hardness: Infinity, color: "#1a1a1a" },
   [B.WATER]:  { name: "water", solid: false, hardness: Infinity, color: "#3a6acc", transparent: true, liquid: true },
+  [B.RAW_BEEF]: { name: "raw_beef", solid: false, hardness: 0.1, color: "#c66a72", item: true, food: 2 },
+  [B.COOKED_BEEF]: { name: "cooked_beef", solid: false, hardness: 0.1, color: "#8a4a2a", item: true, food: 7 },
 };
 
 export const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;
