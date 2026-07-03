@@ -53575,7 +53575,7 @@ const CONFIG = {
   world: {
     chunkSize: 16,        // x/z size of a chunk in blocks
     chunkHeight: 64,      // y size
-    renderDistance: 4,    // chunks in each direction from player
+    renderDistance: 3,    // chunks in each direction from player
     seaLevel: 12,
     baseHeight: 18,
     hillHeight: 22,
@@ -54009,9 +54009,78 @@ function getMaterials(id) {
   ];
 }
 
+// === Texture atlas ===
+// One big canvas with all block-face tiles in a 16x16 grid; each block face
+// gets a slot. Lets us merge chunk geometry into a single mesh per chunk.
+const ATLAS_TILES = 16;            // 16x16 grid
+const ATLAS_TILE_PX = SIZE;        // 16
+const ATLAS_PX = ATLAS_TILES * ATLAS_TILE_PX; // 256
+let atlasTexture = null;
+const slotIndex = new Map();        // `${id}:${face}` -> tileIndex 0..255
+let nextSlot = 0;
+
+function faceName(idx) {
+  return idx === 2 ? "top" : idx === 3 ? "bottom" : "side";
+}
+
+function ensureAtlasSlot(id, faceIdx) {
+  const face = faceName(faceIdx);
+  const key = `${id}:${face}`;
+  if (slotIndex.has(key)) return slotIndex.get(key);
+  const slot = nextSlot++;
+  slotIndex.set(key, slot);
+
+  // Render the per-tile canvas into the atlas at (col, row).
+  const col = slot % ATLAS_TILES, row = Math.floor(slot / ATLAS_TILES);
+  const tx = col * ATLAS_TILE_PX, ty = row * ATLAS_TILE_PX;
+
+  // Create a temp canvas to draw via existing drawTexture, then copy pixels.
+  const tmp = drawTexture(id, face);
+  const tmpCanvas = tmp.image;
+  // Also cache as a regular texture for HUD use.
+  cache.set(key, tmp);
+  // Get the atlas canvas (create lazily).
+  if (!atlasTexture) {
+    const c = document.createElement("canvas");
+    c.width = c.height = ATLAS_PX;
+    atlasTexture = new THREE.CanvasTexture(c);
+    atlasTexture.magFilter = THREE.NearestFilter;
+    atlasTexture.minFilter = THREE.NearestMipmapNearestFilter;
+    atlasTexture.colorSpace = THREE.SRGBColorSpace;
+    atlasTexture.generateMipmaps = true;
+  }
+  const ctx = atlasTexture.image.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(tmpCanvas, 0, 0, ATLAS_TILE_PX, ATLAS_TILE_PX, tx, ty, ATLAS_TILE_PX, ATLAS_TILE_PX);
+  atlasTexture.needsUpdate = true;
+  return slot;
+}
+
+// Returns [u0, v0, u1, v1] for the tile of (id, faceIdx), allocating as needed.
+function atlasUV(id, faceIdx) {
+  const slot = ensureAtlasSlot(id, faceIdx);
+  const col = slot % ATLAS_TILES, row = Math.floor(slot / ATLAS_TILES);
+  // Inset slightly to avoid bleeding between tiles.
+  const eps = 0.001;
+  const u0 = (col + eps) / ATLAS_TILES;
+  const u1 = (col + 1 - eps) / ATLAS_TILES;
+  // Three.js textures have origin at bottom-left, canvas at top-left → flip V.
+  const v0 = (ATLAS_TILES - row - 1 + eps) / ATLAS_TILES;
+  const v1 = (ATLAS_TILES - row - eps) / ATLAS_TILES;
+  return [u0, v0, u1, v1];
+}
+
+function getAtlasTexture() {
+  // Force-create atlas with one call so it always exists.
+  if (!atlasTexture) atlasUV(1, 0);
+  return atlasTexture;
+}
+
   window.getTexture = typeof getTexture !== 'undefined' ? getTexture : undefined;
   window.getCrackTexture = typeof getCrackTexture !== 'undefined' ? getCrackTexture : undefined;
   window.getMaterials = typeof getMaterials !== 'undefined' ? getMaterials : undefined;
+  window.atlasUV = typeof atlasUV !== 'undefined' ? atlasUV : undefined;
+  window.getAtlasTexture = typeof getAtlasTexture !== 'undefined' ? getAtlasTexture : undefined;
 })();
 
 // === js/world/chunk.js ===
@@ -54132,9 +54201,9 @@ function generateChunk(cx, cz, noise) {
 
 // === js/world/mesher.js ===
 (function () {
-// Builds a chunk's geometry by face-culling against neighbours. Produces one
-// THREE.Mesh per (blockId, faceIndex, transparent) bucket. Simple and correct
-// at the cost of more draw calls.
+// Builds a chunk's geometry by face-culling against neighbours. Produces a
+// SINGLE mesh per chunk per layer (opaque + transparent), using a shared
+// texture atlas and per-face UV lookup. Two draw calls per chunk total.
 
 const MCS = CHUNK_SIZE, MCH = CHUNK_HEIGHT;
 
@@ -54147,25 +54216,33 @@ const FACES = [
   { dir: [ 0, 0,-1], corners: [[0,0,0],[0,1,0],[1,1,0],[1,0,0]] },
 ];
 
-const materialCache = new Map();
-function getMat(id, faceIdx) {
-  const key = `${id}:${faceIdx}`;
-  if (materialCache.has(key)) return materialCache.get(key);
-  const m = getMaterials(id)[faceIdx];
-  materialCache.set(key, m);
-  return m;
+let opaqueMat = null, transparentMat = null;
+function getOpaqueMat() {
+  if (!opaqueMat) opaqueMat = new THREE.MeshLambertMaterial({ map: getAtlasTexture() });
+  return opaqueMat;
+}
+function getTransparentMat() {
+  if (!transparentMat) {
+    transparentMat = new THREE.MeshLambertMaterial({
+      map: getAtlasTexture(), transparent: true, alphaTest: 0.3, depthWrite: true,
+    });
+  }
+  return transparentMat;
 }
 
-function disposeGroup(group) {
-  if (!group) return;
-  group.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+function disposeMesh(m) {
+  if (!m) return;
+  if (m.geometry) m.geometry.dispose();
 }
 
 function buildChunkMesh(chunk, world) {
-  if (chunk.mesh) { world.group.remove(chunk.mesh); disposeGroup(chunk.mesh); chunk.mesh = null; }
-  if (chunk.transparentMesh) { world.group.remove(chunk.transparentMesh); disposeGroup(chunk.transparentMesh); chunk.transparentMesh = null; }
+  if (chunk.mesh) { world.group.remove(chunk.mesh); disposeMesh(chunk.mesh); chunk.mesh = null; }
+  if (chunk.transparentMesh) { world.group.remove(chunk.transparentMesh); disposeMesh(chunk.transparentMesh); chunk.transparentMesh = null; }
 
-  const buckets = new Map();
+  // Per-layer arrays.
+  const opaque = { positions: [], normals: [], uvs: [], indices: [] };
+  const transparent = { positions: [], normals: [], uvs: [], indices: [] };
+
   const baseX = chunk.cx * MCS, baseZ = chunk.cz * MCS;
 
   for (let y = 0; y < MCH; y++)
@@ -54173,61 +54250,52 @@ function buildChunkMesh(chunk, world) {
       for (let x = 0; x < MCS; x++) {
         const id = chunk.blocks[chunk.idx(x, y, z)];
         if (id === B.AIR) continue;
-        const transparent = !!BLOCKS[id]?.transparent;
-        const liquid = !!BLOCKS[id]?.liquid;
+        const def = BLOCKS[id];
+        const isTransparent = !!def?.transparent;
+        const isLiquid = !!def?.liquid;
         for (let f = 0; f < 6; f++) {
           const face = FACES[f];
           const nx = x + face.dir[0], ny = y + face.dir[1], nz = z + face.dir[2];
           const neighbour = world.getBlock(baseX + nx, ny, baseZ + nz);
           if (neighbour === B.AIR) {
-            // Always render against air.
+            // ok
           } else if (BLOCKS[neighbour]?.liquid) {
-            // Don't render block faces against same liquid (e.g. water-water).
-            if (liquid) continue;
+            if (isLiquid) continue;
           } else if (BLOCKS[neighbour]?.transparent) {
             if (neighbour === id) continue;
           } else {
-            continue; // opaque neighbour hides face
+            continue;
           }
 
-          const matKey = `${id}:${f}:${transparent ? "t" : "o"}`;
-          let b = buckets.get(matKey);
-          if (!b) {
-            b = { positions: [], normals: [], uvs: [], indices: [], id, faceIdx: f, transparent };
-            buckets.set(matKey, b);
-          }
-          const vIdx = b.positions.length / 3;
+          const layer = isTransparent ? transparent : opaque;
+          const vIdx = layer.positions.length / 3;
           for (const c of face.corners) {
-            b.positions.push(x + c[0], y + c[1], z + c[2]);
-            b.normals.push(face.dir[0], face.dir[1], face.dir[2]);
+            layer.positions.push(x + c[0], y + c[1], z + c[2]);
+            layer.normals.push(face.dir[0], face.dir[1], face.dir[2]);
           }
-          b.uvs.push(0, 0, 0, 1, 1, 1, 1, 0);
-          b.indices.push(vIdx, vIdx + 1, vIdx + 2, vIdx, vIdx + 2, vIdx + 3);
+          const [u0, v0, u1, v1] = atlasUV(id, f);
+          // corners are 0..3 in this order; UVs map (0,0)(0,1)(1,1)(1,0).
+          layer.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
+          layer.indices.push(vIdx, vIdx + 1, vIdx + 2, vIdx, vIdx + 2, vIdx + 3);
         }
       }
 
-  if (buckets.size === 0) { chunk.dirty = false; return; }
-
-  const opaqueGroup = new THREE.Group();
-  const transGroup = new THREE.Group();
-  for (const b of buckets.values()) {
+  function makeMesh(layer, material) {
+    if (layer.positions.length === 0) return null;
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(b.positions, 3));
-    geo.setAttribute("normal",  new THREE.Float32BufferAttribute(b.normals, 3));
-    geo.setAttribute("uv",      new THREE.Float32BufferAttribute(b.uvs, 2));
-    geo.setIndex(b.indices);
-    const mesh = new THREE.Mesh(geo, getMat(b.id, b.faceIdx));
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(layer.positions, 3));
+    geo.setAttribute("normal",  new THREE.Float32BufferAttribute(layer.normals, 3));
+    geo.setAttribute("uv",      new THREE.Float32BufferAttribute(layer.uvs, 2));
+    geo.setIndex(layer.indices);
+    const mesh = new THREE.Mesh(geo, material);
     mesh.position.set(chunk.cx * MCS, 0, chunk.cz * MCS);
-    (b.transparent ? transGroup : opaqueGroup).add(mesh);
+    return mesh;
   }
-  if (opaqueGroup.children.length) {
-    chunk.mesh = opaqueGroup;
-    world.group.add(opaqueGroup);
-  }
-  if (transGroup.children.length) {
-    chunk.transparentMesh = transGroup;
-    world.group.add(transGroup);
-  }
+
+  const om = makeMesh(opaque, getOpaqueMat());
+  const tm = makeMesh(transparent, getTransparentMat());
+  if (om) { chunk.mesh = om; world.group.add(om); }
+  if (tm) { chunk.transparentMesh = tm; world.group.add(tm); }
   chunk.dirty = false;
 }
 

@@ -281,3 +281,70 @@ export function getMaterials(id) {
     new THREE.MeshLambertMaterial({ map: getTexture(id, "side") }),
   ];
 }
+
+// === Texture atlas ===
+// One big canvas with all block-face tiles in a 16x16 grid; each block face
+// gets a slot. Lets us merge chunk geometry into a single mesh per chunk.
+const ATLAS_TILES = 16;            // 16x16 grid
+const ATLAS_TILE_PX = SIZE;        // 16
+const ATLAS_PX = ATLAS_TILES * ATLAS_TILE_PX; // 256
+let atlasTexture = null;
+const slotIndex = new Map();        // `${id}:${face}` -> tileIndex 0..255
+let nextSlot = 0;
+
+function faceName(idx) {
+  return idx === 2 ? "top" : idx === 3 ? "bottom" : "side";
+}
+
+function ensureAtlasSlot(id, faceIdx) {
+  const face = faceName(faceIdx);
+  const key = `${id}:${face}`;
+  if (slotIndex.has(key)) return slotIndex.get(key);
+  const slot = nextSlot++;
+  slotIndex.set(key, slot);
+
+  // Render the per-tile canvas into the atlas at (col, row).
+  const col = slot % ATLAS_TILES, row = Math.floor(slot / ATLAS_TILES);
+  const tx = col * ATLAS_TILE_PX, ty = row * ATLAS_TILE_PX;
+
+  // Create a temp canvas to draw via existing drawTexture, then copy pixels.
+  const tmp = drawTexture(id, face);
+  const tmpCanvas = tmp.image;
+  // Also cache as a regular texture for HUD use.
+  cache.set(key, tmp);
+  // Get the atlas canvas (create lazily).
+  if (!atlasTexture) {
+    const c = document.createElement("canvas");
+    c.width = c.height = ATLAS_PX;
+    atlasTexture = new THREE.CanvasTexture(c);
+    atlasTexture.magFilter = THREE.NearestFilter;
+    atlasTexture.minFilter = THREE.NearestMipmapNearestFilter;
+    atlasTexture.colorSpace = THREE.SRGBColorSpace;
+    atlasTexture.generateMipmaps = true;
+  }
+  const ctx = atlasTexture.image.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(tmpCanvas, 0, 0, ATLAS_TILE_PX, ATLAS_TILE_PX, tx, ty, ATLAS_TILE_PX, ATLAS_TILE_PX);
+  atlasTexture.needsUpdate = true;
+  return slot;
+}
+
+// Returns [u0, v0, u1, v1] for the tile of (id, faceIdx), allocating as needed.
+export function atlasUV(id, faceIdx) {
+  const slot = ensureAtlasSlot(id, faceIdx);
+  const col = slot % ATLAS_TILES, row = Math.floor(slot / ATLAS_TILES);
+  // Inset slightly to avoid bleeding between tiles.
+  const eps = 0.001;
+  const u0 = (col + eps) / ATLAS_TILES;
+  const u1 = (col + 1 - eps) / ATLAS_TILES;
+  // Three.js textures have origin at bottom-left, canvas at top-left → flip V.
+  const v0 = (ATLAS_TILES - row - 1 + eps) / ATLAS_TILES;
+  const v1 = (ATLAS_TILES - row - eps) / ATLAS_TILES;
+  return [u0, v0, u1, v1];
+}
+
+export function getAtlasTexture() {
+  // Force-create atlas with one call so it always exists.
+  if (!atlasTexture) atlasUV(1, 0);
+  return atlasTexture;
+}

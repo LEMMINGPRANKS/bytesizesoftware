@@ -3,7 +3,7 @@ export const CONFIG = {
   world: {
     chunkSize: 16,        // x/z size of a chunk in blocks
     chunkHeight: 64,      // y size
-    renderDistance: 4,    // chunks in each direction from player
+    renderDistance: 3,    // chunks in each direction from player
     seaLevel: 12,
     baseHeight: 18,
     hillHeight: 22,
