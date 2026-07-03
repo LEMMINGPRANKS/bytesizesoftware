@@ -96,15 +96,32 @@ async function main() {
   // ---- UI wiring ----
   const startScreen = $("#start-screen");
   const craftPanel = $("#craft-panel");
+  const resumeOverlay = $("#resume-overlay");
+  let gameStarted = false;
+
+  function showResume() { resumeOverlay.classList.remove("hidden"); }
+  function hideResume() { resumeOverlay.classList.add("hidden"); }
+
+  document.addEventListener("pointerlockchange", () => {
+    const locked = document.pointerLockElement === canvas;
+    if (gameStarted && !locked && !craftOpen && startScreen.classList.contains("hidden")) {
+      showResume();
+    } else if (locked) {
+      hideResume();
+    }
+  });
+  resumeOverlay.addEventListener("click", () => input.requestLock());
+
   $("#start-btn").addEventListener("click", () => {
     startScreen.classList.add("hidden");
     hud.show(true);
+    gameStarted = true;
     input.requestLock();
   });
   $("#craft-close").addEventListener("click", () => {
     craftPanel.classList.add("hidden");
-    if (!startScreen.classList.contains("hidden")) return;
-    input.requestLock();
+    craftOpen = false;
+    showResume();
   });
 
   let recipeSig = "";
@@ -144,7 +161,7 @@ async function main() {
       recipeSig = "";
       refreshCraftIfOpen();
     } else {
-      input.requestLock();
+      showResume();
     }
   }
 
@@ -158,6 +175,13 @@ async function main() {
 
     if (craftOpen) {
       refreshCraftIfOpen();
+      input.endFrame();
+      renderer.render(scene, camera);
+      return;
+    }
+
+    if (!input.locked) {
+      // Paused: still render but don't simulate.
       input.endFrame();
       renderer.render(scene, camera);
       return;

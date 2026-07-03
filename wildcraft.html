@@ -36,9 +36,10 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #87ceeb;
   transform: translate(-50%, 28px); font-size: 13px; padding: 2px 8px;
   background: rgba(0,0,0,0.5); border-radius: 4px; }
 
-#start-screen, #craft-panel { position: fixed; inset: 0;
+#start-screen, #craft-panel, #resume-overlay { position: fixed; inset: 0;
   background: rgba(0,0,0,0.7); display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 14px; z-index: 10; }
+#resume-overlay { background: rgba(0,0,0,0.5); cursor: pointer; z-index: 5; }
 #craft-panel { background: rgba(20,30,40,0.92); }
 #craft-panel h2 { color: #ffd479; }
 #recipe-list { display: grid; grid-template-columns: repeat(2, 320px); gap: 8px;
@@ -69,6 +70,10 @@ p { text-shadow: 1px 1px 2px #000; }
   <h2>Crafting</h2>
   <div id="recipe-list"></div>
   <button id="craft-close">Close [E]</button>
+</div>
+<div id="resume-overlay" class="hidden">
+  <h2>Paused</h2>
+  <p>Click anywhere to resume</p>
 </div>
 <div id="start-screen">
   <h1>Wildcraft</h1>
@@ -54959,15 +54964,32 @@ async function main() {
   // ---- UI wiring ----
   const startScreen = $("#start-screen");
   const craftPanel = $("#craft-panel");
+  const resumeOverlay = $("#resume-overlay");
+  let gameStarted = false;
+
+  function showResume() { resumeOverlay.classList.remove("hidden"); }
+  function hideResume() { resumeOverlay.classList.add("hidden"); }
+
+  document.addEventListener("pointerlockchange", () => {
+    const locked = document.pointerLockElement === canvas;
+    if (gameStarted && !locked && !craftOpen && startScreen.classList.contains("hidden")) {
+      showResume();
+    } else if (locked) {
+      hideResume();
+    }
+  });
+  resumeOverlay.addEventListener("click", () => input.requestLock());
+
   $("#start-btn").addEventListener("click", () => {
     startScreen.classList.add("hidden");
     hud.show(true);
+    gameStarted = true;
     input.requestLock();
   });
   $("#craft-close").addEventListener("click", () => {
     craftPanel.classList.add("hidden");
-    if (!startScreen.classList.contains("hidden")) return;
-    input.requestLock();
+    craftOpen = false;
+    showResume();
   });
 
   let recipeSig = "";
@@ -55007,7 +55029,7 @@ async function main() {
       recipeSig = "";
       refreshCraftIfOpen();
     } else {
-      input.requestLock();
+      showResume();
     }
   }
 
@@ -55021,6 +55043,13 @@ async function main() {
 
     if (craftOpen) {
       refreshCraftIfOpen();
+      input.endFrame();
+      renderer.render(scene, camera);
+      return;
+    }
+
+    if (!input.locked) {
+      // Paused: still render but don't simulate.
       input.endFrame();
       renderer.render(scene, camera);
       return;
