@@ -6,7 +6,7 @@ import { B, BLOCKS } from "./blocks.js";
 import { getMaterials } from "./textures.js";
 import { CHUNK_SIZE, CHUNK_HEIGHT } from "./chunk.js";
 
-const CS = CHUNK_SIZE, CH = CHUNK_HEIGHT;
+const MCS = CHUNK_SIZE, MCH = CHUNK_HEIGHT;
 
 const FACES = [
   { dir: [ 1, 0, 0], corners: [[1,0,0],[1,1,0],[1,1,1],[1,0,1]] },
@@ -36,11 +36,11 @@ export function buildChunkMesh(chunk, world) {
   if (chunk.transparentMesh) { world.group.remove(chunk.transparentMesh); disposeGroup(chunk.transparentMesh); chunk.transparentMesh = null; }
 
   const buckets = new Map();
-  const baseX = chunk.cx * CS, baseZ = chunk.cz * CS;
+  const baseX = chunk.cx * MCS, baseZ = chunk.cz * MCS;
 
-  for (let y = 0; y < CH; y++)
-    for (let z = 0; z < CS; z++)
-      for (let x = 0; x < CS; x++) {
+  for (let y = 0; y < MCH; y++)
+    for (let z = 0; z < MCS; z++)
+      for (let x = 0; x < MCS; x++) {
         const id = chunk.blocks[chunk.idx(x, y, z)];
         if (id === B.AIR) continue;
         const transparent = !!BLOCKS[id]?.transparent;
@@ -87,7 +87,7 @@ export function buildChunkMesh(chunk, world) {
     geo.setAttribute("uv",      new THREE.Float32BufferAttribute(b.uvs, 2));
     geo.setIndex(b.indices);
     const mesh = new THREE.Mesh(geo, getMat(b.id, b.faceIdx));
-    mesh.position.set(chunk.cx * CS, 0, chunk.cz * CS);
+    mesh.position.set(chunk.cx * MCS, 0, chunk.cz * MCS);
     (b.transparent ? transGroup : opaqueGroup).add(mesh);
   }
   if (opaqueGroup.children.length) {
