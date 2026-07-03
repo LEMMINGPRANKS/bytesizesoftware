@@ -215,6 +215,48 @@ export function getTexture(id, face = "side") {
   return t;
 }
 
+// Crack overlay textures (10 stages, Minecraft-style).
+const crackCache = [];
+export function getCrackTexture(stage) {
+  stage = Math.max(0, Math.min(9, stage | 0));
+  if (crackCache[stage]) return crackCache[stage];
+  const { c, ctx } = makeCtx();
+  ctx.clearRect(0, 0, SIZE, SIZE);
+  ctx.strokeStyle = "rgba(0,0,0,0.75)";
+  ctx.lineWidth = 1;
+  // More cracks as stage increases.
+  const rng = mulberry(stage * 31 + 7);
+  const cracks = 2 + stage * 2;
+  for (let i = 0; i < cracks; i++) {
+    let x = rng() * SIZE, y = rng() * SIZE;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    const segs = 2 + ((rng() * 3) | 0);
+    for (let s = 0; s < segs; s++) {
+      x += (rng() * 2 - 1) * 5;
+      y += (rng() * 2 - 1) * 5;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.transparent = true;
+  crackCache[stage] = tex;
+  return tex;
+}
+function mulberry(seed) {
+  let a = seed | 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // Single material per block (cross-face) — simpler meshing. Each block uses
 // its "side" texture; grass/wood get per-face variants via material array.
 export function getMaterials(id) {

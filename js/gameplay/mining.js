@@ -2,6 +2,7 @@
 import * as THREE from "three";
 import { CONFIG } from "../config.js";
 import { B, BLOCKS, isSolid } from "../world/blocks.js";
+import { getCrackTexture } from "../world/textures.js";
 
 export function raycastVoxel(world, origin, dir, maxDist) {
   // Amanatides & Woo DDA.
@@ -45,6 +46,8 @@ export class MiningController {
     this.targetKey = null;
     this.range = CONFIG.mining.range;
     this._wire = null;
+    this._crack = null;
+    this._crackMat = null;
   }
   _key(t) { return t ? `${t.x},${t.y},${t.z}` : null; }
 
@@ -64,15 +67,15 @@ export class MiningController {
     if (k !== this.targetKey) { this.progress = 0; this.targetKey = k; }
     const id = this.world.getBlock(t.x, t.y, t.z);
     const def = BLOCKS[id];
-    if (!def || def.hardness === Infinity) { this._clearWire(); return t; }
-    this.progress += dt;
+    if (!def || def.hardness === Infinity) {
+      this._drawWire(t); this._clearCrack(); return t;
+    }
+    if (miningDown) this.progress += dt;
     const time = def.hardness * CONFIG.mining.baseTime;
     if (this.progress >= time) {
-      // Break it.
       if (def.treeHealth) {
-        // Tree log: damage global tree health system via onBreak hook.
         const broken = this.onBreak?.("tree", id, t.x, t.y, t.z);
-        if (!broken) { /* tree still alive; don't drop block, but visual stays */ }
+        if (!broken) { /* tree alive; keep progress so player can keep hitting */ }
       } else {
         this.onBreak?.("block", id, t.x, t.y, t.z);
       }
@@ -80,14 +83,15 @@ export class MiningController {
       this.targetKey = null;
     }
     this._drawWire(t);
+    this._drawCrack(t, time > 0 ? this.progress / time : 0);
     return t;
   }
 
   _drawWire(t) {
     if (!this._wire) {
-      const geo = new THREE.BoxGeometry(1.02, 1.02, 1.02);
+      const geo = new THREE.BoxGeometry(1.002, 1.002, 1.002);
       const edges = new THREE.EdgesGeometry(geo);
-      const mat = new THREE.LineBasicMaterial({ color: 0x000000 });
+      const mat = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6 });
       this._wire = new THREE.LineSegments(edges, mat);
       this.scene.add(this._wire);
     }
@@ -95,4 +99,26 @@ export class MiningController {
     this._wire.position.set(t.x + 0.5, t.y + 0.5, t.z + 0.5);
   }
   _clearWire() { if (this._wire) this._wire.visible = false; }
+
+  _drawCrack(t, frac) {
+    if (!this._crack) {
+      const geo = new THREE.BoxGeometry(1.01, 1.01, 1.01);
+      this._crackMat = new THREE.MeshBasicMaterial({
+        map: null, transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true,
+        polygonOffsetFactor: -1,
+      });
+      this._crack = new THREE.Mesh(geo, this._crackMat);
+      this._crack.renderOrder = 2;
+      this.scene.add(this._crack);
+    }
+    this._crack.visible = true;
+    this._crack.position.set(t.x + 0.5, t.y + 0.5, t.z + 0.5);
+    const stage = Math.floor(frac * 10);
+    if (stage !== this._lastStage) {
+      this._crackMat.map = getCrackTexture(stage);
+      this._crackMat.needsUpdate = true;
+      this._lastStage = stage;
+    }
+  }
+  _clearCrack() { if (this._crack) this._crack.visible = false; }
 }
