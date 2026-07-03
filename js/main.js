@@ -39,6 +39,7 @@ async function main() {
       world.ensureChunk(dx, dz);
   player.spawn();
   world.update(player.pos.x, player.pos.z);
+  hud.refresh();
 
   function onBreak(kind, id, x, y, z) {
     if (kind === "tree") {
