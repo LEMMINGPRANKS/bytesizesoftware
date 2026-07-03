@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wildcraft</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div id="game-root"></div>
+<div id="hud" class="hidden">
+  <div id="crosshair"></div>
+  <div id="hotbar"></div>
+  <div id="status">
+    <span id="fps">0</span> fps · <span id="pos">0,0,0</span>
+  </div>
+  <div id="target-info" class="hidden"></div>
+</div>
+<div id="craft-panel" class="hidden">
+  <h2>Crafting</h2>
+  <div id="recipe-list"></div>
+  <button id="craft-close">Close [E]</button>
+</div>
+<div id="start-screen">
+  <h1>Wildcraft</h1>
+  <p>Click to play. WASD move, Space jump, Mouse look.</p>
+  <p>Left click: mine · Right click: place selected · 1-9: hotbar · E: craft</p>
+  <button id="start-btn">Play</button>
+</div>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
