@@ -9,7 +9,8 @@ import { Player } from "./entities/player.js";
 import { MiningController, raycastVoxel } from "./gameplay/mining.js";
 import { Inventory } from "./gameplay/inventory.js";
 import { HUD } from "./ui/hud.js";
-import { RECIPES, canCraft, craft } from "./gameplay/crafting.js";
+import { RECIPES } from "./gameplay/recipes.js";
+import { canCraft, craft } from "./gameplay/crafting.js";
 import { TreeSystem } from "./gameplay/trees.js";
 import { B, BLOCKS, isSolid, isLiquid } from "./world/blocks.js";
 
