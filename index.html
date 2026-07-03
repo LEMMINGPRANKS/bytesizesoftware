@@ -25,7 +25,7 @@
   <h1>Wildcraft</h1>
   <p>Click to play. WASD move, Space jump, Mouse look.</p>
   <p>Left click: mine · Right click: place selected · 1-9: hotbar · E: craft</p>
-  <button id="start-btn">Play</button>
+  <button id="start-btn" onclick="window.__playClicked=true; document.getElementById('boot-status').textContent='Play clicked — initializing…';">Play</button>
   <div id="boot-status">Loading…</div>
 </div>
 <div id="error-overlay" style="position:fixed;bottom:0;left:0;right:0;background:#400;color:#fff;padding:10px;font-family:monospace;font-size:13px;display:none;z-index:100;"></div>
