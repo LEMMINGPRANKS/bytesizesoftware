@@ -160,7 +160,7 @@ async function main() {
 
     // Mining: hold left mouse.
     const target = mining.update(dt, player, input.mouseDown[0]);
-    if (input.mouseJust[2]) placeBlock();
+    if (input.mouseJust[2] || input.justPressed.has("KeyQ")) placeBlock();
     if (input.mouseJust[0] && target && !BLOCKS[world.getBlock(target.x, target.y, target.z)]?.treeHealth) {
       // single-tap also fine; the hold loop does the work
     }

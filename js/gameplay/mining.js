@@ -73,12 +73,7 @@ export class MiningController {
     if (miningDown) this.progress += dt;
     const time = def.hardness * CONFIG.mining.baseTime;
     if (this.progress >= time) {
-      if (def.treeHealth) {
-        const broken = this.onBreak?.("tree", id, t.x, t.y, t.z);
-        if (!broken) { /* tree alive; keep progress so player can keep hitting */ }
-      } else {
-        this.onBreak?.("block", id, t.x, t.y, t.z);
-      }
+      this.onBreak?.("block", id, t.x, t.y, t.z);
       this.progress = 0;
       this.targetKey = null;
     }

@@ -73,7 +73,7 @@ p { text-shadow: 1px 1px 2px #000; }
 <div id="start-screen">
   <h1>Wildcraft</h1>
   <p>Click to play. WASD move, Space jump, Mouse look.</p>
-  <p>Left click: mine · Right click: place selected · 1-9: hotbar · E: craft</p>
+  <p>Left click: mine · Right click or Q: place selected · 1-9: hotbar · E: craft</p>
   <button id="start-btn" onclick="window.__playClicked=true; document.getElementById('boot-status').textContent='Play clicked — initializing…';">Play</button>
   <div id="boot-status">Loading…</div>
 </div>
@@ -54629,12 +54629,7 @@ class MiningController {
     if (miningDown) this.progress += dt;
     const time = def.hardness * CONFIG.mining.baseTime;
     if (this.progress >= time) {
-      if (def.treeHealth) {
-        const broken = this.onBreak?.("tree", id, t.x, t.y, t.z);
-        if (!broken) { /* tree alive; keep progress so player can keep hitting */ }
-      } else {
-        this.onBreak?.("block", id, t.x, t.y, t.z);
-      }
+      this.onBreak?.("block", id, t.x, t.y, t.z);
       this.progress = 0;
       this.targetKey = null;
     }
@@ -55028,7 +55023,7 @@ async function main() {
 
     // Mining: hold left mouse.
     const target = mining.update(dt, player, input.mouseDown[0]);
-    if (input.mouseJust[2]) placeBlock();
+    if (input.mouseJust[2] || input.justPressed.has("KeyQ")) placeBlock();
     if (input.mouseJust[0] && target && !BLOCKS[world.getBlock(target.x, target.y, target.z)]?.treeHealth) {
       // single-tap also fine; the hold loop does the work
     }
