@@ -16,10 +16,17 @@ import { B, BLOCKS, isSolid, isLiquid } from "./world/blocks.js";
 
 const $ = (s) => document.querySelector(s);
 
+function setStatus(msg) {
+  const el = document.getElementById("boot-status");
+  if (el) el.textContent = msg;
+}
+
 async function main() {
-  const root = $("#game-root");
-  const canvas = document.createElement("canvas");
-  root.appendChild(canvas);
+  try {
+    setStatus("Loading Three.js…");
+    const root = $("#game-root");
+    const canvas = document.createElement("canvas");
+    root.appendChild(canvas);
 
   const { renderer, scene, camera } = createRenderer(canvas);
   const world = new World(scene);
@@ -33,6 +40,7 @@ async function main() {
   // Starter inventory: a few planks to bootstrap.
   inv.add(B.PLANKS, 8);
 
+  setStatus("Generating world…");
   // Pre-generate chunks around spawn so player spawns on solid ground.
   for (let dx = -1; dx <= 1; dx++)
     for (let dz = -1; dz <= 1; dz++)
@@ -40,6 +48,7 @@ async function main() {
   player.spawn();
   world.update(player.pos.x, player.pos.z);
   hud.refresh();
+  setStatus("Ready — click Play!");
 
   function onBreak(kind, id, x, y, z) {
     if (kind === "tree") {
@@ -176,6 +185,12 @@ async function main() {
     input.endFrame();
   });
   loop.start();
+  } catch (err) {
+    setStatus("Init failed: " + err.message);
+    const el = document.getElementById("error-overlay");
+    if (el) { el.style.display = "block"; el.textContent = "Init failed: " + err.message + "\n" + err.stack; }
+    console.error(err);
+  }
 }
 
 main();

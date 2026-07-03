@@ -26,13 +26,33 @@
   <p>Click to play. WASD move, Space jump, Mouse look.</p>
   <p>Left click: mine · Right click: place selected · 1-9: hotbar · E: craft</p>
   <button id="start-btn">Play</button>
+  <div id="boot-status">Loading…</div>
 </div>
+<div id="error-overlay" style="position:fixed;bottom:0;left:0;right:0;background:#400;color:#fff;padding:10px;font-family:monospace;font-size:13px;display:none;z-index:100;"></div>
 <script type="importmap">
 {
   "imports": {
     "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
   }
 }
+</script>
+<script>
+// Surface any module-loading or runtime error so it's never silent.
+window.addEventListener("error", (e) => {
+  const el = document.getElementById("error-overlay");
+  if (el) {
+    el.style.display = "block";
+    el.textContent = "Error: " + (e.message || "(unknown)") +
+      (e.filename ? "  (" + e.filename.split("/").pop() + ":" + e.lineno + ")" : "");
+  }
+});
+window.addEventListener("unhandledrejection", (e) => {
+  const el = document.getElementById("error-overlay");
+  if (el) {
+    el.style.display = "block";
+    el.textContent = "Promise rejection: " + (e.reason?.message || e.reason || "(unknown)");
+  }
+});
 </script>
 <script type="module" src="js/main.js"></script>
 </body>
