@@ -238,12 +238,40 @@ function drawTexture(id, face) {
     }
     case B.WATER: {
       ctx.clearRect(0, 0, SIZE, SIZE);
-      ctx.fillStyle = "rgba(58,106,204,0.7)";
+      // Depth gradient: lighter near surface, darker depths.
+      const grad = ctx.createLinearGradient(0, 0, 0, SIZE);
+      grad.addColorStop(0, "rgba(96,168,224,0.78)");
+      grad.addColorStop(0.5, "rgba(48,108,184,0.82)");
+      grad.addColorStop(1, "rgba(28,72,140,0.85)");
+      ctx.fillStyle = grad;
       ctx.fillRect(0, 0, SIZE, SIZE);
-      ctx.strokeStyle = "rgba(255,255,255,0.3)";
-      for (let i = 0; i < 5; i++) {
-        const y = (Math.random() * SIZE) | 0;
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(SIZE, y); ctx.stroke();
+      // Wavy ripple lines with varying opacity.
+      const rng = mulberry(42);
+      for (let i = 0; i < 8; i++) {
+        const baseY = rng() * SIZE;
+        const amp = 0.6 + rng() * 1.4;
+        const freq = 0.4 + rng() * 0.6;
+        const phase = rng() * Math.PI * 2;
+        const alpha = 0.15 + rng() * 0.35;
+        ctx.strokeStyle = `rgba(255,255,255,${alpha.toFixed(2)})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let x = 0; x <= SIZE; x++) {
+          const y = baseY + Math.sin(x * freq + phase) * amp;
+          if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      // Tiny sparkle highlights (sun glints).
+      for (let i = 0; i < 6; i++) {
+        const x = (rng() * SIZE) | 0, y = (rng() * SIZE) | 0;
+        ctx.fillStyle = "rgba(255,255,255,0.55)";
+        ctx.fillRect(x, y, 1, 1);
+      }
+      // Dark specks for underwater depth feel.
+      ctx.fillStyle = "rgba(0,16,40,0.25)";
+      for (let i = 0; i < 8; i++) {
+        ctx.fillRect((rng() * SIZE) | 0, (rng() * SIZE) | 0, 1, 1);
       }
       break;
     }
