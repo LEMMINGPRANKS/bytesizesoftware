@@ -28,3 +28,10 @@ inventory/recipes/health), ui (hud), save (saveManager).
 
 ## Tunables
 All gameplay numbers live in `js/config.js`. Edit there, not in modules.
+
+## Release discipline
+After every version bump (e.g. 1.0.2 → 1.0.3), update the `<div id="version-tag">`
+in `index.html`, rebuild the bundle with `python3 build.py`, then immediately
+`git commit` the changes and `git tag <version>`. Never bundle multiple
+releases into one commit — each version gets its own commit so `git checkout
+<tag>` recovers any past release exactly.
