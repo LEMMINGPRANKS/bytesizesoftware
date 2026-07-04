@@ -37,7 +37,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #87ceeb;
 #craft-panel { background: rgba(20,30,40,0.92); }
 #craft-panel h2 { color: #ffd479; }
 #recipe-list { display: grid; grid-template-columns: repeat(2, 320px); gap: 8px;
-  max-width: 720px; }
+  max-width: 720px; max-height: 65vh; overflow-y: auto; padding: 4px; }
+#craft-panel button { margin-top: 8px; }
 .recipe { display: flex; justify-content: space-between; align-items: center;
   padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;
   border: 1px solid #444; pointer-events: auto; }
