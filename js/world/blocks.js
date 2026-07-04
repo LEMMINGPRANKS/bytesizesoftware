@@ -7,13 +7,14 @@ export const B = {
   IRON_BLOCK: 21, GOLD_BLOCK: 22, DIAMOND_BLOCK: 23, PLATINUM_BLOCK: 24,
   BEDROCK: 25, WATER: 26,
   RAW_BEEF: 27, COOKED_BEEF: 28,
+  PICKAXE_WOOD: 29, PICKAXE_IRON: 30, PICKAXE_DIAMOND: 31, PICKAXE_PLATINUM: 32,
 };
 
 export const BLOCKS = {
   [B.AIR]:    { name: "air",     solid: false, transparent: true },
   [B.GRASS]:  { name: "grass",   solid: true,  hardness: 0.6, top: "#5fa83a", side: "#8a6a3a", bottom: "#6a4a2a" },
   [B.DIRT]:   { name: "dirt",    solid: true,  hardness: 0.6, color: "#6a4a2a" },
-  [B.STONE]:  { name: "stone",   solid: true,  hardness: 1.5, color: "#888888" },
+  [B.STONE]:  { name: "stone",   solid: true,  hardness: 1.5, color: "#888888", toolTier: 1 },
   [B.SAND]:   { name: "sand",    solid: true,  hardness: 0.5, color: "#e3d9a2" },
   [B.WOOD]:   { name: "wood",    solid: true,  hardness: 1.2, top: "#a07a3a", side: "#6b4a1f", treeHealth: true },
   [B.LEAVES]: { name: "leaves",  solid: true,  hardness: 0.3, color: "#3a7a2a", transparent: true },
@@ -22,11 +23,13 @@ export const BLOCKS = {
   [B.WALL_STONE]: { name: "wall_stone", solid: true, hardness: 3.0, color: "#6e6e72" },
   [B.WALL_WOOD]:  { name: "wall_wood",  solid: true, hardness: 2.0, color: "#7a5a2a" },
   [B.FIREPLACE]: { name: "fireplace", solid: true, hardness: 3.5, color: "#3a2a1a", light: 14 },
-  [B.IRON_ORE]: { name: "iron_ore", solid: true, hardness: 2.5, color: "#caa472" },
-  [B.GOLD_ORE]: { name: "gold_ore", solid: true, hardness: 3.0, color: "#ffd700" },
-  [B.DIAMOND_ORE]: { name: "diamond_ore", solid: true, hardness: 4.0, color: "#7afcff" },
-  [B.PLATINUM_ORE]: { name: "platinum_ore", solid: true, hardness: 5.0, color: "#e8e8f0" },
-  [B.COBBLE]: { name: "cobble", solid: true, hardness: 1.8, color: "#7c7c80" },
+  [B.IRON_ORE]: { name: "iron_ore", solid: true, hardness: 2.5, color: "#caa472", toolTier: 2 },
+  [B.GOLD_ORE]: { name: "gold_ore", solid: true, hardness: 3.0, color: "#ffd700", toolTier: 2 },
+  [B.DIAMOND_ORE]: { name: "diamond_ore", solid: true, hardness: 4.0, color: "#7afcff", toolTier: 3 },
+  [B.PLATINUM_ORE]: { name: "platinum_ore", solid: true, hardness: 5.0, color: "#e8e8f0", toolTier: 4 },
+  [B.COBBLE]: { name: "cobble", solid: true, hardness: 1.8, color: "#7c7c80", toolTier: 1 },
+  [B.WALL_STONE]: { name: "wall_stone", solid: true, hardness: 3.0, color: "#6e6e72", toolTier: 1 },
+  [B.BRICK]: { name: "brick", solid: true, hardness: 2.5, color: "#a23a2a", toolTier: 1 },
   [B.GLASS]:  { name: "glass", solid: true, hardness: 0.4, color: "#bcd8e8", transparent: true },
   [B.BRICK]:  { name: "brick", solid: true, hardness: 2.5, color: "#a23a2a" },
   [B.ARCH]:   { name: "arch", solid: false, hardness: 1.2, color: "#c89656", transparent: true, decor: true },
@@ -39,6 +42,10 @@ export const BLOCKS = {
   [B.WATER]:  { name: "water", solid: false, hardness: Infinity, color: "#3a6acc", transparent: true, liquid: true },
   [B.RAW_BEEF]: { name: "raw_beef", solid: false, hardness: 0.1, color: "#c66a72", item: true, food: 2 },
   [B.COOKED_BEEF]: { name: "cooked_beef", solid: false, hardness: 0.1, color: "#8a4a2a", item: true, food: 7 },
+  [B.PICKAXE_WOOD]: { name: "pickaxe_wood", solid: false, hardness: 0.1, color: "#a07a3a", item: true, tool: "pickaxe", toolTier: 1 },
+  [B.PICKAXE_IRON]: { name: "pickaxe_iron", solid: false, hardness: 0.1, color: "#dcdcdc", item: true, tool: "pickaxe", toolTier: 2 },
+  [B.PICKAXE_DIAMOND]: { name: "pickaxe_diamond", solid: false, hardness: 0.1, color: "#8af6ff", item: true, tool: "pickaxe", toolTier: 3 },
+  [B.PICKAXE_PLATINUM]: { name: "pickaxe_platinum", solid: false, hardness: 0.1, color: "#f0f0f8", item: true, tool: "pickaxe", toolTier: 4 },
 };
 
 export const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;

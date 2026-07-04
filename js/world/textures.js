@@ -198,6 +198,43 @@ function drawTexture(id, face) {
       specks(ctx, "#a8703a", 4);
       break;
     }
+    case B.PICKAXE_WOOD:
+    case B.PICKAXE_IRON:
+    case B.PICKAXE_DIAMOND:
+    case B.PICKAXE_PLATINUM: {
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      // Pickaxe head color = block color
+      const head = baseColor || "#888";
+      // Handle (wood)
+      ctx.strokeStyle = "#6a4a2a";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(3, 13);
+      ctx.lineTo(13, 3);
+      ctx.stroke();
+      // Head
+      ctx.fillStyle = head;
+      ctx.beginPath();
+      ctx.moveTo(2, 4);
+      ctx.lineTo(7, 2);
+      ctx.lineTo(9, 5);
+      ctx.lineTo(7, 7);
+      ctx.lineTo(4, 6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(11, 4);
+      ctx.lineTo(14, 6);
+      ctx.lineTo(13, 9);
+      ctx.lineTo(10, 7);
+      ctx.closePath();
+      ctx.fill();
+      // Highlight
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.fillRect(3, 3, 1, 1);
+      ctx.fillRect(12, 5, 1, 1);
+      break;
+    }
     case B.WATER: {
       ctx.clearRect(0, 0, SIZE, SIZE);
       ctx.fillStyle = "rgba(58,106,204,0.7)";

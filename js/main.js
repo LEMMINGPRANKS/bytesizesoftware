@@ -34,7 +34,7 @@ async function main() {
   const world = new World(scene);
   const player = new Player(camera, world);
   const input = new Input(canvas);
-  const mining = new MiningController(world, scene, onBreak);
+  const mining = new MiningController(world, scene, onBreak, () => inv.selected());
   const trees = new TreeSystem(world);
   const mobs = new MobSystem(world, scene);
   const inv = new Inventory();
@@ -64,13 +64,11 @@ async function main() {
   hud.setHunger(hunger);
   setStatus("Ready — click Play!");
 
-  function onBreak(kind, id, x, y, z) {
+  function onBreak(kind, id, x, y, z, drop = true) {
     if (kind === "tree") {
       const res = trees.hitLog(x, y, z);
       if (res) {
-        // Tree fell: drop logs.
         inv.add(B.WOOD, res.logs);
-        // Also some leaves drop.
         for (let dx = -2; dx <= 2; dx++)
           for (let dy = -2; dy <= 2; dy++)
             for (let dz = -2; dz <= 2; dz++) {
@@ -84,7 +82,7 @@ async function main() {
       return false;
     }
     world.setBlock(x, y, z, B.AIR);
-    inv.add(id, 1);
+    if (drop) inv.add(id, 1);
     hud.refresh();
     return true;
   }

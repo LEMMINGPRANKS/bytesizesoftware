@@ -38,10 +38,11 @@ export function raycastVoxel(world, origin, dir, maxDist) {
 
 // Mining state per current target.
 export class MiningController {
-  constructor(world, scene, onBreak) {
+  constructor(world, scene, onBreak, getSelectedItem) {
     this.world = world;
     this.scene = scene;
     this.onBreak = onBreak;
+    this.getSelectedItem = getSelectedItem || (() => null);
     this.progress = 0;
     this.targetKey = null;
     this.range = CONFIG.mining.range;
@@ -71,9 +72,19 @@ export class MiningController {
       this._drawWire(t); this._clearCrack(); return t;
     }
     if (miningDown) this.progress += dt;
-    const time = def.hardness * CONFIG.mining.baseTime;
+    // Speed up if the selected item is a pickaxe of sufficient tier.
+    const selected = this.getSelectedItem?.();
+    const selDef = selected != null ? BLOCKS[selected] : null;
+    const toolMul = (selDef?.tool === "pickaxe" && selDef?.toolTier >= (def.toolTier || 0)) ? 2.2 : 1.0;
+    const time = def.hardness * CONFIG.mining.baseTime / toolMul;
     if (this.progress >= time) {
-      this.onBreak?.("block", id, t.x, t.y, t.z);
+      // Tool-tier gate: can't break protected blocks without the right pickaxe.
+      if ((def.toolTier || 0) > 0 && (selDef?.tool !== "pickaxe" || (selDef?.toolTier || 0) < def.toolTier)) {
+        // Wrong tool: block doesn't drop, but the block does break visually.
+        this.onBreak?.("block", id, t.x, t.y, t.z, /*drop=*/false);
+      } else {
+        this.onBreak?.("block", id, t.x, t.y, t.z, /*drop=*/true);
+      }
       this.progress = 0;
       this.targetKey = null;
     }
