@@ -27,14 +27,21 @@
 </div>
 <div id="start-screen">
   <h1>Wildcraft</h1>
-  <p>Click to play. WASD move, Space jump, Mouse look.</p>
-  <p>Left click: mine/attack · Right click or Q: place/eat · 1-9: hotbar · E: craft</p>
-  <p>Cook raw beef near a fireplace. Watch your hunger bar!</p>
-  <div id="mode-picker" style="display:flex;gap:20px;font-size:18px;">
-    <label><input type="radio" name="mode" value="survival" checked> Survival</label>
-    <label><input type="radio" name="mode" value="creative"> Creative (fly + infinite blocks)</label>
+  <p>WASD move · Space jump · Mouse look · Left click mine/attack · Right click/Q place/eat · 1-9 hotbar · E craft</p>
+  <h2>Pick a World</h2>
+  <div id="world-list"></div>
+  <div id="new-world-form" class="hidden">
+    <h3>New World</h3>
+    <label>Name: <input id="new-world-name" type="text" maxlength="20" placeholder="Cool World"></label>
+    <div style="display:flex;gap:20px;font-size:18px;margin-top:8px;">
+      <label><input type="radio" name="newmode" value="survival" checked> Survival</label>
+      <label><input type="radio" name="newmode" value="creative"> Creative (fly + infinite blocks)</label>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:8px;">
+      <button id="new-world-create">Create</button>
+      <button id="new-world-cancel">Cancel</button>
+    </div>
   </div>
-  <button id="start-btn" onclick="window.__playClicked=true; document.getElementById('boot-status').textContent='Play clicked — initializing…';">Play</button>
   <div id="boot-status">Loading…</div>
 </div>
 <div id="error-overlay" style="position:fixed;bottom:0;left:0;right:0;background:#400;color:#fff;padding:10px;font-family:monospace;font-size:13px;display:none;z-index:100;"></div>

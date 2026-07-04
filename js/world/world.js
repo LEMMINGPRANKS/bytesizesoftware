@@ -17,7 +17,9 @@ export class World {
     this.group = new THREE.Group();
     scene.add(this.group);
     this.treesHealth = new Map(); // `${wx},${wy},${wz}` -> hp
+    this.modified = new Map();   // `${wx},${wy},${wz}` -> blockId (player edits)
   }
+  static modKey(x, y, z) { return `${x},${y},${z}`; }
   key(cx, cz) { return `${cx},${cz}`; }
 
   getChunk(cx, cz) { return this.chunks.get(this.key(cx, cz)); }
@@ -28,6 +30,18 @@ export class World {
     if (!c) {
       c = generateChunk(cx, cz, this.noise);
       this.chunks.set(k, c);
+      // Replay any player edits that land inside this chunk.
+      if (this.modified.size) {
+        const x0 = cx * CHUNK_SIZE, z0 = cz * CHUNK_SIZE;
+        const x1 = x0 + CHUNK_SIZE - 1, z1 = z0 + CHUNK_SIZE - 1;
+        for (const [key, v] of this.modified) {
+          const parts = key.split(",");
+          const wx = +parts[0], wy = +parts[1], wz = +parts[2];
+          if (wx < x0 || wx > x1 || wz < z0 || wz > z1) continue;
+          if (wy < 0 || wy >= CONFIG.world.chunkHeight) continue;
+          c.set(wx - x0, wy, wz - z0, v);
+        }
+      }
     }
     return c;
   }
@@ -47,6 +61,7 @@ export class World {
     const c = this.ensureChunk(cx, cz);
     const lx = wx - cx * CHUNK_SIZE, lz = wz - cz * CHUNK_SIZE;
     c.set(lx, wy, lz, v);
+    this.modified.set(World.modKey(wx, wy, wz), v);
     // mark neighbours dirty if on border
     if (lx === 0) { const n = this.getChunk(cx - 1, cz); if (n) n.dirty = true; }
     if (lx === CHUNK_SIZE - 1) { const n = this.getChunk(cx + 1, cz); if (n) n.dirty = true; }

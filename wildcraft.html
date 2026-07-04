@@ -52,8 +52,29 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #87ceeb;
 .recipe button:disabled { background: #555; cursor: not-allowed; }
 .recipe .cost { font-size: 12px; opacity: 0.85; }
 button { padding: 10px 18px; font-size: 16px; cursor: pointer; }
+button.danger { background: #a44; color: #fff; border: none; border-radius: 4px; }
+button.danger:hover { background: #c55; }
 h1 { font-size: 48px; text-shadow: 3px 3px 0 #000; }
+h2 { font-size: 22px; color: #ffd479; text-shadow: 1px 1px 2px #000; }
+h3 { color: #ffd479; }
 p { text-shadow: 1px 1px 2px #000; }
+label { display: inline-block; }
+
+#world-list { display: flex; flex-direction: column; gap: 8px; max-width: 560px;
+  width: 90vw; max-height: 50vh; overflow-y: auto; padding: 4px; }
+.world-row { display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: rgba(255,255,255,0.06);
+  border: 1px solid #444; border-radius: 8px; }
+.world-row.empty { opacity: 0.6; }
+.world-name { font-size: 18px; font-weight: 600; }
+.world-meta { font-size: 12px; opacity: 0.8; }
+.world-btns { display: flex; gap: 6px; }
+
+#new-world-form { background: rgba(20,30,40,0.95); padding: 16px 20px;
+  border-radius: 10px; border: 1px solid #555; margin-top: 10px;
+  display: flex; flex-direction: column; gap: 6px; align-items: center; }
+#new-world-form input[type="text"] { padding: 6px 10px; font-size: 16px;
+  background: #222; color: #fff; border: 1px solid #555; border-radius: 4px; }
 </style>
 </head>
 <body>
@@ -77,14 +98,21 @@ p { text-shadow: 1px 1px 2px #000; }
 </div>
 <div id="start-screen">
   <h1>Wildcraft</h1>
-  <p>Click to play. WASD move, Space jump, Mouse look.</p>
-  <p>Left click: mine/attack · Right click or Q: place/eat · 1-9: hotbar · E: craft</p>
-  <p>Cook raw beef near a fireplace. Watch your hunger bar!</p>
-  <div id="mode-picker" style="display:flex;gap:20px;font-size:18px;">
-    <label><input type="radio" name="mode" value="survival" checked> Survival</label>
-    <label><input type="radio" name="mode" value="creative"> Creative (fly + infinite blocks)</label>
+  <p>WASD move · Space jump · Mouse look · Left click mine/attack · Right click/Q place/eat · 1-9 hotbar · E craft</p>
+  <h2>Pick a World</h2>
+  <div id="world-list"></div>
+  <div id="new-world-form" class="hidden">
+    <h3>New World</h3>
+    <label>Name: <input id="new-world-name" type="text" maxlength="20" placeholder="Cool World"></label>
+    <div style="display:flex;gap:20px;font-size:18px;margin-top:8px;">
+      <label><input type="radio" name="newmode" value="survival" checked> Survival</label>
+      <label><input type="radio" name="newmode" value="creative"> Creative (fly + infinite blocks)</label>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:8px;">
+      <button id="new-world-create">Create</button>
+      <button id="new-world-cancel">Cancel</button>
+    </div>
   </div>
-  <button id="start-btn" onclick="window.__playClicked=true; document.getElementById('boot-status').textContent='Play clicked — initializing…';">Play</button>
   <div id="boot-status">Loading…</div>
 </div>
 <div id="error-overlay" style="position:fixed;bottom:0;left:0;right:0;background:#400;color:#fff;padding:10px;font-family:monospace;font-size:13px;display:none;z-index:100;"></div>
@@ -53741,7 +53769,6 @@ class Noise {
 (function () {
 // Procedural canvas textures. Each block face gets a 16x16 texture made from
 // noise patterns. Cached per block id.
-
 const SIZE = 16;
 const cache = new Map(); // key: `${id}:${face}` -> THREE.Texture
 
@@ -54169,7 +54196,6 @@ const CHUNK_HEIGHT = CH;
 (function () {
 // World generator: terrain heightmap + dirt/stone layering, ores, sand at sea,
 // and scattered trees. Returns a fully populated Chunk.
-
 const W = CONFIG.world;
 const ORE_TABLE = [
   [B.PLATINUM_ORE, CONFIG.ores.platinum],
@@ -54266,7 +54292,6 @@ function generateChunk(cx, cz, noise) {
 // Builds a chunk's geometry by face-culling against neighbours. Produces a
 // SINGLE mesh per chunk per layer (opaque + transparent), using a shared
 // texture atlas and per-face UV lookup. Two draw calls per chunk total.
-
 const MCS = CHUNK_SIZE, MCH = CHUNK_HEIGHT;
 
 const FACES = [
@@ -54409,7 +54434,6 @@ function buildChunkMesh(chunk, world) {
 (function () {
 // World manager: owns chunks, generation, block get/set across boundaries,
 // and per-frame chunk streaming around the player.
-
 class World {
   constructor(scene, seed = (Math.random() * 1e9) | 0) {
     this.scene = scene;
@@ -54419,7 +54443,9 @@ class World {
     this.group = new THREE.Group();
     scene.add(this.group);
     this.treesHealth = new Map(); // `${wx},${wy},${wz}` -> hp
+    this.modified = new Map();   // `${wx},${wy},${wz}` -> blockId (player edits)
   }
+  static modKey(x, y, z) { return `${x},${y},${z}`; }
   key(cx, cz) { return `${cx},${cz}`; }
 
   getChunk(cx, cz) { return this.chunks.get(this.key(cx, cz)); }
@@ -54430,6 +54456,18 @@ class World {
     if (!c) {
       c = generateChunk(cx, cz, this.noise);
       this.chunks.set(k, c);
+      // Replay any player edits that land inside this chunk.
+      if (this.modified.size) {
+        const x0 = cx * CHUNK_SIZE, z0 = cz * CHUNK_SIZE;
+        const x1 = x0 + CHUNK_SIZE - 1, z1 = z0 + CHUNK_SIZE - 1;
+        for (const [key, v] of this.modified) {
+          const parts = key.split(",");
+          const wx = +parts[0], wy = +parts[1], wz = +parts[2];
+          if (wx < x0 || wx > x1 || wz < z0 || wz > z1) continue;
+          if (wy < 0 || wy >= CONFIG.world.chunkHeight) continue;
+          c.set(wx - x0, wy, wz - z0, v);
+        }
+      }
     }
     return c;
   }
@@ -54449,6 +54487,7 @@ class World {
     const c = this.ensureChunk(cx, cz);
     const lx = wx - cx * CHUNK_SIZE, lz = wz - cz * CHUNK_SIZE;
     c.set(lx, wy, lz, v);
+    this.modified.set(World.modKey(wx, wy, wz), v);
     // mark neighbours dirty if on border
     if (lx === 0) { const n = this.getChunk(cx - 1, cz); if (n) n.dirty = true; }
     if (lx === CHUNK_SIZE - 1) { const n = this.getChunk(cx + 1, cz); if (n) n.dirty = true; }
@@ -54509,7 +54548,6 @@ class World {
 
 // === js/engine/renderer.js ===
 (function () {
-
 function createRenderer(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
@@ -54621,7 +54659,6 @@ class Input {
 // === js/entities/player.js ===
 (function () {
 // First-person player: AABB voxel collision, walking, jumping, gravity, fly.
-
 const TMP = new THREE.Vector3();
 
 class Player {
@@ -54761,7 +54798,6 @@ class Player {
 // === js/gameplay/mining.js ===
 (function () {
 // Voxel raycast (DDA) + mining/placing logic + per-target mining progress.
-
 function raycastVoxel(world, origin, dir, maxDist) {
   // Amanatides & Woo DDA.
   let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
@@ -54894,7 +54930,6 @@ class MiningController {
 // === js/gameplay/inventory.js ===
 (function () {
 // Inventory: { blockId: count }. Hotbar holds up to 9 selected items.
-
 class Inventory {
   constructor() {
     this.items = {};            // id -> count
@@ -54932,7 +54967,6 @@ class Inventory {
 (function () {
 // Recipe definitions. Each recipe: output block id + count, and a list of
 // inputs {id, count}. Plus some "decorative" variants.
-
 const RECIPES = [
   { out: [B.PLANKS, 4],    in: [{ id: B.WOOD, count: 1 }],            name: "Planks ×4" },
   { out: [B.BEAM, 2],      in: [{ id: B.PLANKS, count: 2 }],          name: "Beams ×2" },
@@ -54964,7 +54998,6 @@ const TOOL_TIERS = ["Wood", "Stone", "Iron", "Gold", "Diamond", "Platinum"];
 
 // === js/gameplay/crafting.js ===
 (function () {
-
 function canCraft(inv, recipe, context = {}) {
   if (recipe.needsFire && !context.nearFire) return false;
   return recipe.in.every((c) => inv.has(c.id, c.count));
@@ -54987,7 +55020,6 @@ function craft(inv, recipe, context = {}) {
 // Trees: store health per tree log position. When any log of a tree is hit,
 // damage is dealt to the tree as a whole (a tree has a single shared hp).
 // When hp reaches 0, every log in the tree is broken and dropped.
-
 class TreeSystem {
   constructor(world) {
     this.world = world;
@@ -55044,7 +55076,6 @@ class TreeSystem {
 (function () {
 // Cow entity: a wandering mob that can be killed for raw beef.
 // Built from primitive boxes — body, head, 4 legs, snout, horns.
-
 function box(w, h, d, color) {
   const g = new THREE.BoxGeometry(w, h, d);
   const m = new THREE.MeshLambertMaterial({ color });
@@ -55237,7 +55268,6 @@ class Cow {
 // === js/gameplay/mobs.js ===
 (function () {
 // Mob system: spawns/despawns cows around the player and updates them.
-
 class MobSystem {
   constructor(world, scene) {
     this.world = world;
@@ -55308,7 +55338,6 @@ class MobSystem {
 
 // === js/ui/hud.js ===
 (function () {
-
 const $ = (s) => document.querySelector(s);
 
 class HUD {
@@ -55380,10 +55409,68 @@ class HUD {
   window.HUD = typeof HUD !== 'undefined' ? HUD : undefined;
 })();
 
+// === js/save/saveManager.js ===
+(function () {
+// Save/load to localStorage. Up to 10 slots. Each slot stores the seed,
+// player state, inventory, hunger, and the player's block edits as a delta
+// map keyed by "x,y,z". On load, the world regenerates from the seed and
+// then the delta is replayed — so we never persist whole chunks.
+const KEY = (slot) => `wildcraft:slot:${slot}`;
+const MAX_SLOTS = 10;
+
+function listSlots() {
+  const out = [];
+  for (let i = 0; i < MAX_SLOTS; i++) {
+    const raw = localStorage.getItem(KEY(i));
+    if (!raw) { out.push(null); continue; }
+    try {
+      const data = JSON.parse(raw);
+      out.push({
+        slot: i,
+        name: data.name || `World ${i + 1}`,
+        mode: data.mode || "survival",
+        seed: data.seed,
+        timestamp: data.timestamp || 0,
+        editCount: data.modified ? Object.keys(data.modified).length : 0,
+      });
+    } catch {
+      out.push(null);
+    }
+  }
+  return out;
+}
+
+function loadSlot(slot) {
+  const raw = localStorage.getItem(KEY(slot));
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+function saveSlot(slot, data) {
+  data.timestamp = Date.now();
+  try {
+    localStorage.setItem(KEY(slot), JSON.stringify(data));
+    return true;
+  } catch (e) {
+    console.warn("save failed", e);
+    return false;
+  }
+}
+
+function deleteSlot(slot) {
+  localStorage.removeItem(KEY(slot));
+}
+
+  window.MAX_SLOTS = typeof MAX_SLOTS !== 'undefined' ? MAX_SLOTS : undefined;
+  window.listSlots = typeof listSlots !== 'undefined' ? listSlots : undefined;
+  window.loadSlot = typeof loadSlot !== 'undefined' ? loadSlot : undefined;
+  window.saveSlot = typeof saveSlot !== 'undefined' ? saveSlot : undefined;
+  window.deleteSlot = typeof deleteSlot !== 'undefined' ? deleteSlot : undefined;
+})();
+
 // === js/main.js ===
 (function () {
 // Entry: wire renderer → world → player → mining/placing → crafting → HUD.
-
 const $ = (s) => document.querySelector(s);
 
 function setStatus(msg) {
@@ -55399,39 +55486,61 @@ async function main() {
     root.appendChild(canvas);
 
   const { renderer, scene, camera } = createRenderer(canvas);
-  const world = new World(scene);
-  const player = new Player(camera, world);
-  const input = new Input(canvas);
-  const mining = new MiningController(world, scene, onBreak, () => inv.selected());
-  const trees = new TreeSystem(world);
-  const mobs = new MobSystem(world, scene);
-  const inv = new Inventory();
-  const hud = new HUD(inv);
-  let hunger = 20;            // 0..20
+  // World/player/etc. are created when a slot is chosen — seed depends on slot.
+  let world, player, input, mining, trees, mobs, inv, hud;
+  let hunger = 20;
   let lastHungerTick = performance.now();
   let attackCooldown = 0;
   let creativeMode = false;
+  let activeSlot = null;
+  let lastAutoSave = performance.now();
 
-  // Starter inventory: a few planks to bootstrap.
-  inv.add(B.PLANKS, 8);
-
-  setStatus("Generating world…");
-  // Pre-warm the texture atlas so chunk meshing never triggers a re-upload mid-game.
-  for (const idStr of Object.keys(BLOCKS)) {
-    const id = Number(idStr);
-    if (id === B.AIR || id === B.WATER) continue;
-    for (let f = 0; f < 6; f++) atlasUV(id, f);
+  function applyMode(mode) {
+    if (mode === "creative") {
+      creativeMode = true;
+      player.fly = true;
+      const palette = [
+        B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.PLANKS, B.WALL_STONE, B.BRICK, B.GLASS, B.TORCH,
+      ];
+      for (let i = 0; i < palette.length && i < 9; i++) {
+        inv.hotbar[i] = palette[i];
+        inv.items[palette[i]] = Infinity;
+      }
+      hunger = 20;
+      hud.setHunger(hunger);
+      hud.refresh();
+    }
   }
-  // Pre-generate chunks around spawn so player spawns on solid ground.
-  for (let dx = -1; dx <= 1; dx++)
-    for (let dz = -1; dz <= 1; dz++)
-      world.ensureChunk(dx, dz);
-  player.spawn();
-  world.update(player.pos.x, player.pos.z);
-  hud.refresh();
-  hud.setHunger(hunger);
-  setStatus("Ready — click Play!");
 
+  function snapshot() {
+    return {
+      version: 1,
+      name: activeSlot?.name || "World",
+      mode: creativeMode ? "creative" : "survival",
+      seed: world.seed,
+      player: {
+        x: player.pos.x, y: player.pos.y, z: player.pos.z,
+        yaw: player.yaw, pitch: player.pitch,
+        fly: player.fly,
+      },
+      inventory: {
+        items: Object.fromEntries(
+          Object.entries(inv.items).map(([k, v]) => [k, v === Infinity ? null : v])
+        ),
+        hotbar: inv.hotbar,
+        active: inv.active,
+      },
+      hunger,
+      modified: Object.fromEntries(world.modified),
+    };
+  }
+
+  function doSave() {
+    if (activeSlot == null) return;
+    saveSlot(activeSlot.slot, snapshot());
+  }
+
+  // ---- Block-event handlers (defined once; bound after world exists) ----
   function onBreak(kind, id, x, y, z, drop = true) {
     if (kind === "tree") {
       const res = trees.hitLog(x, y, z);
@@ -55458,13 +55567,11 @@ async function main() {
   function placeBlock() {
     const sel = inv.selected();
     if (sel === null) return;
-    // If selected item is food, eat instead of placing.
     if (BLOCKS[sel]?.food) { eat(sel); return; }
     const t = mining.acquire(player);
     if (!t) return;
     const px = t.x + t.face[0], py = t.y + t.face[1], pz = t.z + t.face[2];
     if (py < 0 || py >= CONFIG.world.chunkHeight) return;
-    // Don't place inside the player.
     const minX = player.pos.x - player.half, maxX = player.pos.x + player.half;
     const minY = player.pos.y, maxY = player.pos.y + player.height;
     const minZ = player.pos.z - player.half, maxZ = player.pos.z + player.half;
@@ -55478,7 +55585,7 @@ async function main() {
   function eat(id) {
     const def = BLOCKS[id];
     if (!def?.food) return;
-    if (hunger >= 20) return; // full
+    if (hunger >= 20) return;
     if (!inv.remove(id, 1)) return;
     hunger = Math.min(20, hunger + def.food);
     hud.setHunger(hunger);
@@ -55504,7 +55611,6 @@ async function main() {
       const wasAlive = cow.alive;
       cow.hit(4, player.pos);
       if (wasAlive && !cow.alive) {
-        // Cow just died — drop 2–3 raw beef.
         const drop = 2 + (Math.random() * 2 | 0);
         inv.add(B.RAW_BEEF, drop);
         hud.refresh();
@@ -55512,13 +55618,179 @@ async function main() {
     }
   }
 
-  // ---- UI wiring ----
+  // ---- World list / start-screen wiring ----
   const startScreen = $("#start-screen");
   const craftPanel = $("#craft-panel");
   const resumeOverlay = $("#resume-overlay");
+  const worldList = $("#world-list");
+  const newWorldForm = $("#new-world-form");
   let gameStarted = false;
+  let craftOpen = false;
+  let pendingNewSlot = null;
 
-  function showResume() { resumeOverlay.classList.remove("hidden"); }
+  // Pre-warm the texture atlas up front so it's ready when a world loads.
+  for (const idStr of Object.keys(BLOCKS)) {
+    const id = Number(idStr);
+    if (id === B.AIR || id === B.WATER) continue;
+    for (let f = 0; f < 6; f++) atlasUV(id, f);
+  }
+
+  function fmtTime(ts) {
+    if (!ts) return "never";
+    const diff = Date.now() - ts;
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return "just now";
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+  }
+
+  function renderWorldList() {
+    worldList.innerHTML = "";
+    const slots = listSlots();
+    for (let i = 0; i < MAX_SLOTS; i++) {
+      const s = slots[i];
+      const row = document.createElement("div");
+      row.className = "world-row";
+      if (s) {
+        row.innerHTML = `<div class="world-info">
+            <div class="world-name">${escapeHtml(s.name)}</div>
+            <div class="world-meta">${s.mode} · seed ${s.seed} · ${s.editCount} edits · ${fmtTime(s.timestamp)}</div>
+          </div>`;
+        const play = document.createElement("button");
+        play.textContent = "Play";
+        play.onclick = () => startGame(i);
+        const del = document.createElement("button");
+        del.textContent = "Delete";
+        del.className = "danger";
+        del.onclick = () => {
+          if (confirm(`Delete "${s.name}"? This cannot be undone.`)) {
+            deleteSlot(i);
+            renderWorldList();
+          }
+        };
+        const btns = document.createElement("div");
+        btns.className = "world-btns";
+        btns.append(play, del);
+        row.append(btns);
+      } else {
+        row.classList.add("empty");
+        row.innerHTML = `<div class="world-info"><div class="world-name">Slot ${i + 1} — Empty</div></div>`;
+        const create = document.createElement("button");
+        create.textContent = "Create";
+        create.onclick = () => openNewWorldForm(i);
+        const btns = document.createElement("div");
+        btns.className = "world-btns";
+        btns.append(create);
+        row.append(btns);
+      }
+      worldList.append(row);
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+    ));
+  }
+
+  function openNewWorldForm(slot) {
+    pendingNewSlot = slot;
+    newWorldForm.classList.remove("hidden");
+    $("#new-world-name").value = "";
+    $("#new-world-name").focus();
+  }
+
+  $("#new-world-cancel").addEventListener("click", () => {
+    newWorldForm.classList.add("hidden");
+    pendingNewSlot = null;
+  });
+  $("#new-world-create").addEventListener("click", () => {
+    if (pendingNewSlot == null) return;
+    const name = $("#new-world-name").value.trim() || `World ${pendingNewSlot + 1}`;
+    const mode = document.querySelector('input[name="newmode"]:checked')?.value || "survival";
+    const seed = (Math.random() * 1e9) | 0;
+    activeSlot = { slot: pendingNewSlot, name, mode, seed };
+    newWorldForm.classList.add("hidden");
+    pendingNewSlot = null;
+    bootWorld(mode, seed, null);
+  });
+  $("#new-world-name").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("#new-world-create").click();
+  });
+
+  function bootWorld(mode, seed, saved) {
+    setStatus("Generating world…");
+    world = new World(scene, seed);
+    player = new Player(camera, world);
+    input = new Input(canvas);
+    mining = new MiningController(world, scene, onBreak, () => inv?.selected());
+    trees = new TreeSystem(world);
+    mobs = new MobSystem(world, scene);
+    inv = new Inventory();
+    hud = new HUD(inv);
+    hunger = 20;
+    lastHungerTick = performance.now();
+    attackCooldown = 0;
+    creativeMode = false;
+
+    if (saved && saved.modified) {
+      // Pre-seed the modified map before any chunk is generated so they
+      // get applied lazily as chunks come into view.
+      for (const [k, v] of Object.entries(saved.modified)) world.modified.set(k, v);
+    }
+
+    // Pre-generate spawn chunks so player has ground.
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dz = -1; dz <= 1; dz++)
+        world.ensureChunk(dx, dz);
+
+    if (saved && saved.player) {
+      player.pos.set(saved.player.x, saved.player.y, saved.player.z);
+      player.yaw = saved.player.yaw || 0;
+      player.pitch = saved.player.pitch || 0;
+      if (saved.player.fly) player.fly = true;
+    } else {
+      player.spawn();
+    }
+
+    if (saved && saved.inventory) {
+      inv.items = saved.inventory.items || {};
+      inv.hotbar = saved.inventory.hotbar || inv.hotbar;
+      inv.active = saved.inventory.active || 0;
+      // Convert any serialised Infinity (JSON has no Infinity) back.
+      for (const k of Object.keys(inv.items)) if (inv.items[k] === null) inv.items[k] = Infinity;
+    } else {
+      inv.add(B.PLANKS, 8);
+    }
+
+    if (saved && typeof saved.hunger === "number") hunger = saved.hunger;
+
+    if (mode === "creative") applyMode("creative");
+
+    world.update(player.pos.x, player.pos.z);
+    hud.refresh();
+    hud.setHunger(hunger);
+
+    startScreen.classList.add("hidden");
+    hud.show(true);
+    gameStarted = true;
+    input.requestLock();
+    setStatus("Ready");
+  }
+
+  function startGame(slot) {
+    const data = loadSlot(slot);
+    if (!data) { renderWorldList(); return; }
+    activeSlot = { slot, name: data.name, mode: data.mode, seed: data.seed };
+    bootWorld(data.mode || "survival", data.seed, data);
+  }
+
+  function showResume() {
+    resumeOverlay.classList.remove("hidden");
+    doSave(); // save on pause
+  }
   function hideResume() { resumeOverlay.classList.add("hidden"); }
 
   document.addEventListener("pointerlockchange", () => {
@@ -55529,39 +55801,14 @@ async function main() {
       hideResume();
     }
   });
-  resumeOverlay.addEventListener("click", () => input.requestLock());
+  resumeOverlay.addEventListener("click", () => input?.requestLock());
 
-  $("#start-btn").addEventListener("click", () => {
-    const mode = document.querySelector('input[name="mode"]:checked')?.value || "survival";
-    applyMode(mode);
-    startScreen.classList.add("hidden");
-    hud.show(true);
-    gameStarted = true;
-    input.requestLock();
+  // Save on tab close / page hide.
+  window.addEventListener("beforeunload", () => doSave());
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) doSave();
   });
 
-  function applyMode(mode) {
-    if (mode === "creative") {
-      creativeMode = true;
-      player.fly = true;
-      player.fly = true;
-      // Give every placeable block in the hotbar.
-      const placeable = Object.keys(BLOCKS)
-        .map(Number)
-        .filter((id) => id !== B.AIR && !BLOCKS[id]?.item && id !== B.WATER && id !== B.BEDROCK);
-      // Fill hotbar slots with a useful subset (max 9).
-      const palette = [
-        B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.PLANKS, B.WALL_STONE, B.BRICK, B.GLASS, B.TORCH,
-      ];
-      for (let i = 0; i < palette.length && i < 9; i++) {
-        inv.hotbar[i] = palette[i];
-        inv.items[palette[i]] = Infinity;
-      }
-      hunger = 20;
-      hud.setHunger(hunger);
-      hud.refresh();
-    }
-  }
   $("#craft-close").addEventListener("click", () => {
     craftPanel.classList.add("hidden");
     craftOpen = false;
@@ -55594,10 +55841,8 @@ async function main() {
     if (sig !== recipeSig) { recipeSig = sig; renderRecipes(); }
   }
 
-  // ---- Loop ----
   let lastFpsT = performance.now();
   let frames = 0;
-  let craftOpen = false;
 
   function toggleCraft() {
     craftOpen = !craftOpen;
@@ -55612,6 +55857,7 @@ async function main() {
   }
 
   const loop = new Loop((dt, now) => {
+    if (!gameStarted) { renderer.render(scene, camera); return; }
     // Hotbar selection
     for (let i = 0; i < 9; i++) {
       if (input.justPressed.has(`Digit${i + 1}`)) { inv.active = i; hud.refresh(); }
@@ -55627,7 +55873,6 @@ async function main() {
     }
 
     if (!input.locked) {
-      // Paused: still render but don't simulate.
       input.endFrame();
       renderer.render(scene, camera);
       return;
@@ -55637,30 +55882,20 @@ async function main() {
 
     player.update(dt, input);
 
-    // Left-click: attack cow if aimed at one, otherwise mine.
     if (input.mouseJust[0]) attack();
     const miningAim = !mobs.raycast(player.eyePos(), player.lookDir(), CONFIG.mining.range + 1);
     const target = mining.update(dt, player, input.mouseDown[0] && miningAim);
     if (input.mouseJust[2] || input.justPressed.has("KeyQ")) placeBlock();
 
-    // Mobs
     mobs.update(dt, player.pos);
 
-    // Hunger tick
     const nowMs = performance.now();
-    if (!creativeMode && nowMs - lastHungerTick > 6000) {       // every 6s
+    if (!creativeMode && nowMs - lastHungerTick > 6000) {
       lastHungerTick = nowMs;
       hunger = Math.max(0, hunger - 0.5);
       hud.setHunger(hunger);
-      if (hunger <= 0) {
-        // Starving: light penalty only — no death for now.
-      }
-    }
-    if (input.mouseJust[0] && target && !BLOCKS[world.getBlock(target.x, target.y, target.z)]?.treeHealth) {
-      // single-tap also fine; the hold loop does the work
     }
 
-    // Target info text
     if (target) {
       const id = world.getBlock(target.x, target.y, target.z);
       hud.setTarget(BLOCKS[id]?.name || "");
@@ -55668,7 +55903,12 @@ async function main() {
 
     world.update(player.pos.x, player.pos.z);
 
-    // FPS counter
+    // Auto-save every 30s.
+    if (nowMs - lastAutoSave > 30000) {
+      lastAutoSave = nowMs;
+      doSave();
+    }
+
     frames++;
     if (now - lastFpsT > 500) {
       hud.setFps(((frames * 1000) / (now - lastFpsT)).toFixed(0));
@@ -55680,6 +55920,9 @@ async function main() {
     input.endFrame();
   });
   loop.start();
+
+  renderWorldList();
+  setStatus("Ready — pick a world or create a new one");
   } catch (err) {
     setStatus("Init failed: " + err.message);
     const el = document.getElementById("error-overlay");

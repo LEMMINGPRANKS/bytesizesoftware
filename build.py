@@ -27,6 +27,7 @@ MODULES = [
     "js/entities/cow.js",
     "js/gameplay/mobs.js",
     "js/ui/hud.js",
+    "js/save/saveManager.js",
     "js/main.js",
 ]
 
@@ -55,8 +56,9 @@ def find_exports(src: str) -> list[str]:
 def strip_module_syntax(src: str) -> str:
     # Drop `export { ... };` re-export blocks.
     src = REEXPORT_RE.sub("", src)
-    # Drop import statements.
-    src = re.sub(r"^[ \t]*import\s+[^\n]+\n", "", src, flags=re.MULTILINE)
+    # Drop import statements (single- or multi-line).
+    src = re.sub(r"^[ \t]*import\s+[\s\S]*?from\s+['\"][^'\"]+['\"]\s*;?\s*\n", "", src, flags=re.MULTILINE)
+    src = re.sub(r"^[ \t]*import\s+['\"][^'\"]+['\"]\s*;?\s*\n", "", src, flags=re.MULTILINE)
     # Strip leading `export ` keyword (keep the declaration).
     src = re.sub(r"^[ \t]*export\s+", "", src, flags=re.MULTILINE)
     return src
