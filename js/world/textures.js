@@ -199,6 +199,7 @@ function drawTexture(id, face) {
       break;
     }
     case B.PICKAXE_WOOD:
+    case B.PICKAXE_STONE:
     case B.PICKAXE_IRON:
     case B.PICKAXE_DIAMOND:
     case B.PICKAXE_PLATINUM: {

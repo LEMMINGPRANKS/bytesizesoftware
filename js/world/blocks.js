@@ -8,6 +8,7 @@ export const B = {
   BEDROCK: 25, WATER: 26,
   RAW_BEEF: 27, COOKED_BEEF: 28,
   PICKAXE_WOOD: 29, PICKAXE_IRON: 30, PICKAXE_DIAMOND: 31, PICKAXE_PLATINUM: 32,
+  PICKAXE_STONE: 33,
 };
 
 export const BLOCKS = {
@@ -27,6 +28,7 @@ export const BLOCKS = {
   [B.GOLD_ORE]: { name: "gold_ore", solid: true, hardness: 3.0, color: "#ffd700", toolTier: 2 },
   [B.DIAMOND_ORE]: { name: "diamond_ore", solid: true, hardness: 4.0, color: "#7afcff", toolTier: 3 },
   [B.PLATINUM_ORE]: { name: "platinum_ore", solid: true, hardness: 5.0, color: "#e8e8f0", toolTier: 4 },
+  [B.PICKAXE_STONE]: { name: "pickaxe_stone", solid: false, hardness: 0.1, color: "#9a9a9a", item: true, tool: "pickaxe", toolTier: 2 },
   [B.COBBLE]: { name: "cobble", solid: true, hardness: 1.8, color: "#7c7c80", toolTier: 1 },
   [B.WALL_STONE]: { name: "wall_stone", solid: true, hardness: 3.0, color: "#6e6e72", toolTier: 1 },
   [B.BRICK]: { name: "brick", solid: true, hardness: 2.5, color: "#a23a2a", toolTier: 1 },
@@ -43,9 +45,9 @@ export const BLOCKS = {
   [B.RAW_BEEF]: { name: "raw_beef", solid: false, hardness: 0.1, color: "#c66a72", item: true, food: 2 },
   [B.COOKED_BEEF]: { name: "cooked_beef", solid: false, hardness: 0.1, color: "#8a4a2a", item: true, food: 7 },
   [B.PICKAXE_WOOD]: { name: "pickaxe_wood", solid: false, hardness: 0.1, color: "#a07a3a", item: true, tool: "pickaxe", toolTier: 1 },
-  [B.PICKAXE_IRON]: { name: "pickaxe_iron", solid: false, hardness: 0.1, color: "#dcdcdc", item: true, tool: "pickaxe", toolTier: 2 },
-  [B.PICKAXE_DIAMOND]: { name: "pickaxe_diamond", solid: false, hardness: 0.1, color: "#8af6ff", item: true, tool: "pickaxe", toolTier: 3 },
-  [B.PICKAXE_PLATINUM]: { name: "pickaxe_platinum", solid: false, hardness: 0.1, color: "#f0f0f8", item: true, tool: "pickaxe", toolTier: 4 },
+  [B.PICKAXE_IRON]: { name: "pickaxe_iron", solid: false, hardness: 0.1, color: "#dcdcdc", item: true, tool: "pickaxe", toolTier: 3 },
+  [B.PICKAXE_DIAMOND]: { name: "pickaxe_diamond", solid: false, hardness: 0.1, color: "#8af6ff", item: true, tool: "pickaxe", toolTier: 4 },
+  [B.PICKAXE_PLATINUM]: { name: "pickaxe_platinum", solid: false, hardness: 0.1, color: "#f0f0f8", item: true, tool: "pickaxe", toolTier: 5 },
 };
 
 export const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;
