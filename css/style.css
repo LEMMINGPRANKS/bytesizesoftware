@@ -81,6 +81,15 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #87ceeb;
 #inv-grid, #inv-hotbar { display: grid; grid-template-columns: repeat(9, 54px);
   gap: 6px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 8px; }
 #inv-hotbar { margin-top: 8px; }
+
+#chest-panel { position: fixed; inset: 0; background: rgba(15,22,30,0.96); z-index: 11;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; }
+#chest-panel h2 { color: #ffd479; }
+#chest-grid, #chest-player-grid, #chest-player-hotbar { display: grid;
+  grid-template-columns: repeat(9, 54px); gap: 6px; padding: 8px;
+  background: rgba(0,0,0,0.3); border-radius: 8px; }
+#chest-player-hotbar { margin-top: 6px; }
 .inv-slot { width: 54px; height: 54px; border: 2px solid #555; border-radius: 6px;
   background: rgba(255,255,255,0.06); position: relative; cursor: pointer;
   background-size: cover; background-position: center; }

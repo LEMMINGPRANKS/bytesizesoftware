@@ -87,6 +87,15 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #87ceeb;
 #inv-grid, #inv-hotbar { display: grid; grid-template-columns: repeat(9, 54px);
   gap: 6px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 8px; }
 #inv-hotbar { margin-top: 8px; }
+
+#chest-panel { position: fixed; inset: 0; background: rgba(15,22,30,0.96); z-index: 11;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; }
+#chest-panel h2 { color: #ffd479; }
+#chest-grid, #chest-player-grid, #chest-player-hotbar { display: grid;
+  grid-template-columns: repeat(9, 54px); gap: 6px; padding: 8px;
+  background: rgba(0,0,0,0.3); border-radius: 8px; }
+#chest-player-hotbar { margin-top: 6px; }
 .inv-slot { width: 54px; height: 54px; border: 2px solid #555; border-radius: 6px;
   background: rgba(255,255,255,0.06); position: relative; cursor: pointer;
   background-size: cover; background-position: center; }
@@ -137,7 +146,7 @@ label { display: inline-block; }
   </div>
   <div id="target-info" class="hidden"></div>
 </div>
-<div id="version-tag">release-window-17.2</div>
+<div id="version-tag">0.18</div>
 <div id="craft-panel" class="hidden">
   <h2>Crafting</h2>
   <div id="recipe-list"></div>
@@ -148,6 +157,14 @@ label { display: inline-block; }
   <div id="inv-grid"></div>
   <div id="inv-hotbar"></div>
   <button id="inv-close">Close [Tab]</button>
+</div>
+<div id="chest-panel" class="hidden">
+  <h2>Chest</h2>
+  <div id="chest-grid"></div>
+  <h3 style="font-size:16px;">You</h3>
+  <div id="chest-player-grid"></div>
+  <div id="chest-player-hotbar"></div>
+  <button id="chest-close">Close [E]</button>
 </div>
 <div id="resume-overlay" class="hidden">
   <h2>Paused</h2>
@@ -53746,6 +53763,7 @@ const B = {
   PICKAXE_WOOD: 29, PICKAXE_IRON: 30, PICKAXE_DIAMOND: 31, PICKAXE_PLATINUM: 32,
   PICKAXE_STONE: 33,
   SEAGRASS: 34, RAW_FISH: 35, COOKED_FISH: 36,
+  CHEST: 37,
 };
 
 const BLOCKS = {
@@ -53769,6 +53787,7 @@ const BLOCKS = {
   [B.SEAGRASS]: { name: "seagrass", solid: false, hardness: 0.1, color: "#2a7a3a", transparent: true, decor: true },
   [B.RAW_FISH]: { name: "raw_fish", solid: false, hardness: 0.1, color: "#c8d8e0", item: true, food: 2 },
   [B.COOKED_FISH]: { name: "cooked_fish", solid: false, hardness: 0.1, color: "#e8c890", item: true, food: 7 },
+  [B.CHEST]: { name: "chest", solid: true, hardness: 1.0, color: "#8a5a2a", interactive: true },
   [B.COBBLE]: { name: "cobble", solid: true, hardness: 1.8, color: "#7c7c80", toolTier: 1 },
   [B.WALL_STONE]: { name: "wall_stone", solid: true, hardness: 3.0, color: "#6e6e72", toolTier: 1 },
   [B.BRICK]: { name: "brick", solid: true, hardness: 2.5, color: "#a23a2a", toolTier: 1 },
@@ -54087,6 +54106,23 @@ function drawTexture(id, face) {
       ctx.fillRect(13, 6, 2, 4);
       ctx.fillStyle = "#2a1a08";
       ctx.fillRect(4, 7, 1, 1);
+      break;
+    }
+    case B.CHEST: {
+      // Wood-plank base
+      fillNoise(ctx, base, 12);
+      ctx.strokeStyle = "rgba(60,40,15,0.7)";
+      ctx.strokeRect(0.5, 0.5, SIZE - 1, SIZE - 1);
+      ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(SIZE, 8); ctx.stroke();
+      // Iron bands
+      ctx.fillStyle = "#4a4a4a";
+      ctx.fillRect(0, 2, SIZE, 1);
+      ctx.fillRect(0, SIZE - 3, SIZE, 1);
+      // Lock
+      ctx.fillStyle = "#d8b340";
+      ctx.fillRect(7, 7, 2, 4);
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(7, 9, 2, 1);
       break;
     }
     case B.RAW_BEEF: {
@@ -54697,8 +54733,17 @@ class World {
     scene.add(this.group);
     this.treesHealth = new Map(); // `${wx},${wy},${wz}` -> hp
     this.modified = new Map();   // `${wx},${wy},${wz}` -> blockId (player edits)
+    this.chests = new Map();     // `${wx},${wy},${wz}` -> Array(27) of slot ids or null
   }
   static modKey(x, y, z) { return `${x},${y},${z}`; }
+  // 27-slot chest inventory at a position, created lazily.
+  getChest(x, y, z) {
+    const k = World.modKey(x, y, z);
+    let c = this.chests.get(k);
+    if (!c) { c = new Array(27).fill(null); this.chests.set(k, c); }
+    return c;
+  }
+  removeChest(x, y, z) { this.chests.delete(World.modKey(x, y, z)); }
   key(cx, cz) { return `${cx},${cz}`; }
 
   getChunk(cx, cz) { return this.chunks.get(this.key(cx, cz)); }
@@ -55294,6 +55339,7 @@ const RECIPES = [
   { out: [B.FIREPLACE, 1], in: [{ id: B.COBBLE, count: 4 }, { id: B.WOOD, count: 1 }], name: "Fireplace" },
   { out: [B.TORCH, 4],     in: [{ id: B.WOOD, count: 1 }],            name: "Torch ×4" },
   { out: [B.ARCH, 1],      in: [{ id: B.BEAM, count: 2 }, { id: B.PLANKS, count: 1 }], name: "Arch" },
+  { out: [B.CHEST, 1],     in: [{ id: B.PLANKS, count: 4 }], name: "Chest (27 storage slots)" },
   { out: [B.IRON_BLOCK, 1], in: [{ id: B.IRON_ORE, count: 9 }],       name: "Iron Block" },
   { out: [B.GOLD_BLOCK, 1], in: [{ id: B.GOLD_ORE, count: 9 }],       name: "Gold Block" },
   { out: [B.DIAMOND_BLOCK, 1], in: [{ id: B.DIAMOND_ORE, count: 9 }], name: "Diamond Block" },
@@ -56146,6 +56192,7 @@ async function main() {
       },
       hunger,
       modified: Object.fromEntries(world.modified),
+      chests: Object.fromEntries(world.chests),
     };
   }
 
@@ -56174,6 +56221,14 @@ async function main() {
     }
     world.setBlock(x, y, z, B.AIR);
     if (drop) inv.add(id, 1);
+    // If we just broke a chest, dump its contents into the player inventory.
+    if (id === B.CHEST) {
+      const slots = world.chests.get(World.modKey(x, y, z));
+      if (slots) {
+        for (const sid of slots) if (sid != null) inv.add(sid, 1);
+        world.removeChest(x, y, z);
+      }
+    }
     hud.refresh();
     return true;
   }
@@ -56186,6 +56241,11 @@ async function main() {
     if (def?.item) return; // don't place tools/items in the world
     const t = mining.acquire(player);
     if (!t) return;
+    // Right-clicking an interactive block (chest) opens it instead of placing.
+    if (BLOCKS[world.getBlock(t.x, t.y, t.z)]?.interactive) {
+      openChest(t.x, t.y, t.z);
+      return;
+    }
     const px = t.x + t.face[0], py = t.y + t.face[1], pz = t.z + t.face[2];
     if (py < 0 || py >= CONFIG.world.chunkHeight) return;
     const minX = player.pos.x - player.half, maxX = player.pos.x + player.half;
@@ -56399,9 +56459,10 @@ async function main() {
     creativeMode = false;
 
     if (saved && saved.modified) {
-      // Pre-seed the modified map before any chunk is generated so they
-      // get applied lazily as chunks come into view.
       for (const [k, v] of Object.entries(saved.modified)) world.modified.set(k, v);
+    }
+    if (saved && saved.chests) {
+      for (const [k, v] of Object.entries(saved.chests)) world.chests.set(k, v);
     }
 
     // Pre-generate spawn chunks so player has ground.
@@ -56459,7 +56520,7 @@ async function main() {
 
   document.addEventListener("pointerlockchange", () => {
     const locked = document.pointerLockElement === canvas;
-    if (gameStarted && !locked && !craftOpen && !invOpen && startScreen.classList.contains("hidden")) {
+    if (gameStarted && !locked && !craftOpen && !invOpen && !chestOpen && startScreen.classList.contains("hidden")) {
       showResume();
     } else if (locked) {
       hideResume();
@@ -56599,6 +56660,107 @@ async function main() {
   }
   $("#inv-close").addEventListener("click", toggleInv);
 
+  // ---- Chest panel ----
+  const chestPanel = $("#chest-panel");
+  const chestGrid = $("#chest-grid");
+  const chestPlayerGrid = $("#chest-player-grid");
+  const chestPlayerHotbar = $("#chest-player-hotbar");
+  let chestOpen = false;
+  let chestPos = null;       // {x,y,z} of currently open chest
+  let chestCarried = null;   // {id} held while swapping
+
+  function buildChestSlots() {
+    chestGrid.innerHTML = "";
+    chestPlayerGrid.innerHTML = "";
+    chestPlayerHotbar.innerHTML = "";
+    for (let i = 0; i < 27; i++) {
+      const s = document.createElement("div");
+      s.className = "inv-slot";
+      s.dataset.kind = "chest";
+      s.dataset.idx = i;
+      s.addEventListener("click", () => onChestSlotClick("chest", i));
+      chestGrid.append(s);
+    }
+    for (let i = 0; i < 27; i++) {
+      const s = document.createElement("div");
+      s.className = "inv-slot";
+      s.dataset.kind = "main";
+      s.dataset.idx = i;
+      s.addEventListener("click", () => onChestSlotClick("main", i));
+      chestPlayerGrid.append(s);
+    }
+    for (let i = 0; i < 9; i++) {
+      const s = document.createElement("div");
+      s.className = "inv-slot hotbar";
+      s.dataset.kind = "hotbar";
+      s.dataset.idx = i;
+      s.addEventListener("click", () => onChestSlotClick("hotbar", i));
+      chestPlayerHotbar.append(s);
+    }
+  }
+  function refreshChestPanel() {
+    if (!chestOpen || !chestPos) return;
+    const drawSlot = (el, id, count) => {
+      if (id == null) {
+        el.classList.add("empty");
+        el.style.backgroundImage = "";
+        el.textContent = "";
+      } else {
+        el.classList.remove("empty");
+        const tex = getTexture(id, "side");
+        el.style.backgroundImage = `url(${tex.image.toDataURL?.() || tex.image.src})`;
+        el.textContent = count === Infinity ? "∞" : (count > 1 ? String(count) : "");
+      }
+    };
+    const slots = world.chests.get(World.modKey(chestPos.x, chestPos.y, chestPos.z)) || new Array(27).fill(null);
+    chestGrid.querySelectorAll(".inv-slot").forEach((el) => {
+      const idx = +el.dataset.idx;
+      drawSlot(el, slots[idx], slots[idx] != null ? inv.count(slots[idx]) || 1 : 0);
+    });
+    chestPlayerGrid.querySelectorAll(".inv-slot").forEach((el) => {
+      const id = inv.main[+el.dataset.idx];
+      drawSlot(el, id, id != null ? inv.count(id) : 0);
+    });
+    chestPlayerHotbar.querySelectorAll(".inv-slot").forEach((el) => {
+      const idx = +el.dataset.idx;
+      const id = inv.hotbar[idx];
+      drawSlot(el, id, id != null ? inv.count(id) : 0);
+      el.classList.toggle("active", idx === inv.active);
+    });
+  }
+  function onChestSlotClick(kind, idx) {
+    if (kind === "chest") {
+      if (!chestPos) return;
+      const slots = world.getChest(chestPos.x, chestPos.y, chestPos.z);
+      const cur = slots[idx];
+      if (chestCarried && cur == null) { slots[idx] = chestCarried.id; chestCarried = null; }
+      else if (chestCarried && cur != null && cur === chestCarried.id) { chestCarried = null; }
+      else if (chestCarried && cur != null) { slots[idx] = chestCarried.id; chestCarried = { id: cur }; }
+      else if (!chestCarried && cur != null) { chestCarried = { id: cur }; slots[idx] = null; }
+    } else {
+      const arr = kind === "hotbar" ? inv.hotbar : inv.main;
+      invCarried = inv.swapWith(arr, idx, invCarried);
+    }
+    hud.refresh();
+    refreshChestPanel();
+  }
+  function openChest(x, y, z) {
+    chestPos = { x, y, z };
+    chestOpen = true;
+    invCarried = null; chestCarried = null;
+    document.exitPointerLock?.();
+    chestPanel.classList.remove("hidden");
+    buildChestSlots();
+    refreshChestPanel();
+  }
+  function closeChest() {
+    chestOpen = false;
+    chestPos = null;
+    chestPanel.classList.add("hidden");
+    showResume();
+  }
+  $("#chest-close").addEventListener("click", closeChest);
+
   let recipeSig = "";
   function renderRecipes() {
     const list = $("#recipe-list");
@@ -56646,9 +56808,13 @@ async function main() {
     for (let i = 0; i < 9; i++) {
       if (input.justPressed.has(`Digit${i + 1}`)) { inv.active = i; hud.refresh(); }
     }
-    if (input.justPressed.has("KeyE")) toggleCraft();
+    if (input.justPressed.has("KeyE")) {
+      if (chestOpen) closeChest();
+      else toggleCraft();
+    }
     if (input.justPressed.has("Tab") || input.justPressed.has("KeyI")) toggleInv();
     if (input.justPressed.has("KeyF")) player.toggleFly();
+    if (input.justPressed.has("Escape") && chestOpen) closeChest();
 
     if (craftOpen) {
       refreshCraftIfOpen();
@@ -56657,6 +56823,12 @@ async function main() {
       return;
     }
     if (invOpen) {
+      input.endFrame();
+      renderer.render(scene, camera);
+      return;
+    }
+    if (chestOpen) {
+      refreshChestPanel();
       input.endFrame();
       renderer.render(scene, camera);
       return;

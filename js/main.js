@@ -83,6 +83,7 @@ async function main() {
       },
       hunger,
       modified: Object.fromEntries(world.modified),
+      chests: Object.fromEntries(world.chests),
     };
   }
 
@@ -111,6 +112,14 @@ async function main() {
     }
     world.setBlock(x, y, z, B.AIR);
     if (drop) inv.add(id, 1);
+    // If we just broke a chest, dump its contents into the player inventory.
+    if (id === B.CHEST) {
+      const slots = world.chests.get(World.modKey(x, y, z));
+      if (slots) {
+        for (const sid of slots) if (sid != null) inv.add(sid, 1);
+        world.removeChest(x, y, z);
+      }
+    }
     hud.refresh();
     return true;
   }
@@ -123,6 +132,11 @@ async function main() {
     if (def?.item) return; // don't place tools/items in the world
     const t = mining.acquire(player);
     if (!t) return;
+    // Right-clicking an interactive block (chest) opens it instead of placing.
+    if (BLOCKS[world.getBlock(t.x, t.y, t.z)]?.interactive) {
+      openChest(t.x, t.y, t.z);
+      return;
+    }
     const px = t.x + t.face[0], py = t.y + t.face[1], pz = t.z + t.face[2];
     if (py < 0 || py >= CONFIG.world.chunkHeight) return;
     const minX = player.pos.x - player.half, maxX = player.pos.x + player.half;
@@ -336,9 +350,10 @@ async function main() {
     creativeMode = false;
 
     if (saved && saved.modified) {
-      // Pre-seed the modified map before any chunk is generated so they
-      // get applied lazily as chunks come into view.
       for (const [k, v] of Object.entries(saved.modified)) world.modified.set(k, v);
+    }
+    if (saved && saved.chests) {
+      for (const [k, v] of Object.entries(saved.chests)) world.chests.set(k, v);
     }
 
     // Pre-generate spawn chunks so player has ground.
@@ -396,7 +411,7 @@ async function main() {
 
   document.addEventListener("pointerlockchange", () => {
     const locked = document.pointerLockElement === canvas;
-    if (gameStarted && !locked && !craftOpen && !invOpen && startScreen.classList.contains("hidden")) {
+    if (gameStarted && !locked && !craftOpen && !invOpen && !chestOpen && startScreen.classList.contains("hidden")) {
       showResume();
     } else if (locked) {
       hideResume();
@@ -536,6 +551,107 @@ async function main() {
   }
   $("#inv-close").addEventListener("click", toggleInv);
 
+  // ---- Chest panel ----
+  const chestPanel = $("#chest-panel");
+  const chestGrid = $("#chest-grid");
+  const chestPlayerGrid = $("#chest-player-grid");
+  const chestPlayerHotbar = $("#chest-player-hotbar");
+  let chestOpen = false;
+  let chestPos = null;       // {x,y,z} of currently open chest
+  let chestCarried = null;   // {id} held while swapping
+
+  function buildChestSlots() {
+    chestGrid.innerHTML = "";
+    chestPlayerGrid.innerHTML = "";
+    chestPlayerHotbar.innerHTML = "";
+    for (let i = 0; i < 27; i++) {
+      const s = document.createElement("div");
+      s.className = "inv-slot";
+      s.dataset.kind = "chest";
+      s.dataset.idx = i;
+      s.addEventListener("click", () => onChestSlotClick("chest", i));
+      chestGrid.append(s);
+    }
+    for (let i = 0; i < 27; i++) {
+      const s = document.createElement("div");
+      s.className = "inv-slot";
+      s.dataset.kind = "main";
+      s.dataset.idx = i;
+      s.addEventListener("click", () => onChestSlotClick("main", i));
+      chestPlayerGrid.append(s);
+    }
+    for (let i = 0; i < 9; i++) {
+      const s = document.createElement("div");
+      s.className = "inv-slot hotbar";
+      s.dataset.kind = "hotbar";
+      s.dataset.idx = i;
+      s.addEventListener("click", () => onChestSlotClick("hotbar", i));
+      chestPlayerHotbar.append(s);
+    }
+  }
+  function refreshChestPanel() {
+    if (!chestOpen || !chestPos) return;
+    const drawSlot = (el, id, count) => {
+      if (id == null) {
+        el.classList.add("empty");
+        el.style.backgroundImage = "";
+        el.textContent = "";
+      } else {
+        el.classList.remove("empty");
+        const tex = getTexture(id, "side");
+        el.style.backgroundImage = `url(${tex.image.toDataURL?.() || tex.image.src})`;
+        el.textContent = count === Infinity ? "∞" : (count > 1 ? String(count) : "");
+      }
+    };
+    const slots = world.chests.get(World.modKey(chestPos.x, chestPos.y, chestPos.z)) || new Array(27).fill(null);
+    chestGrid.querySelectorAll(".inv-slot").forEach((el) => {
+      const idx = +el.dataset.idx;
+      drawSlot(el, slots[idx], slots[idx] != null ? inv.count(slots[idx]) || 1 : 0);
+    });
+    chestPlayerGrid.querySelectorAll(".inv-slot").forEach((el) => {
+      const id = inv.main[+el.dataset.idx];
+      drawSlot(el, id, id != null ? inv.count(id) : 0);
+    });
+    chestPlayerHotbar.querySelectorAll(".inv-slot").forEach((el) => {
+      const idx = +el.dataset.idx;
+      const id = inv.hotbar[idx];
+      drawSlot(el, id, id != null ? inv.count(id) : 0);
+      el.classList.toggle("active", idx === inv.active);
+    });
+  }
+  function onChestSlotClick(kind, idx) {
+    if (kind === "chest") {
+      if (!chestPos) return;
+      const slots = world.getChest(chestPos.x, chestPos.y, chestPos.z);
+      const cur = slots[idx];
+      if (chestCarried && cur == null) { slots[idx] = chestCarried.id; chestCarried = null; }
+      else if (chestCarried && cur != null && cur === chestCarried.id) { chestCarried = null; }
+      else if (chestCarried && cur != null) { slots[idx] = chestCarried.id; chestCarried = { id: cur }; }
+      else if (!chestCarried && cur != null) { chestCarried = { id: cur }; slots[idx] = null; }
+    } else {
+      const arr = kind === "hotbar" ? inv.hotbar : inv.main;
+      invCarried = inv.swapWith(arr, idx, invCarried);
+    }
+    hud.refresh();
+    refreshChestPanel();
+  }
+  function openChest(x, y, z) {
+    chestPos = { x, y, z };
+    chestOpen = true;
+    invCarried = null; chestCarried = null;
+    document.exitPointerLock?.();
+    chestPanel.classList.remove("hidden");
+    buildChestSlots();
+    refreshChestPanel();
+  }
+  function closeChest() {
+    chestOpen = false;
+    chestPos = null;
+    chestPanel.classList.add("hidden");
+    showResume();
+  }
+  $("#chest-close").addEventListener("click", closeChest);
+
   let recipeSig = "";
   function renderRecipes() {
     const list = $("#recipe-list");
@@ -583,9 +699,13 @@ async function main() {
     for (let i = 0; i < 9; i++) {
       if (input.justPressed.has(`Digit${i + 1}`)) { inv.active = i; hud.refresh(); }
     }
-    if (input.justPressed.has("KeyE")) toggleCraft();
+    if (input.justPressed.has("KeyE")) {
+      if (chestOpen) closeChest();
+      else toggleCraft();
+    }
     if (input.justPressed.has("Tab") || input.justPressed.has("KeyI")) toggleInv();
     if (input.justPressed.has("KeyF")) player.toggleFly();
+    if (input.justPressed.has("Escape") && chestOpen) closeChest();
 
     if (craftOpen) {
       refreshCraftIfOpen();
@@ -594,6 +714,12 @@ async function main() {
       return;
     }
     if (invOpen) {
+      input.endFrame();
+      renderer.render(scene, camera);
+      return;
+    }
+    if (chestOpen) {
+      refreshChestPanel();
       input.endFrame();
       renderer.render(scene, camera);
       return;

@@ -18,8 +18,17 @@ export class World {
     scene.add(this.group);
     this.treesHealth = new Map(); // `${wx},${wy},${wz}` -> hp
     this.modified = new Map();   // `${wx},${wy},${wz}` -> blockId (player edits)
+    this.chests = new Map();     // `${wx},${wy},${wz}` -> Array(27) of slot ids or null
   }
   static modKey(x, y, z) { return `${x},${y},${z}`; }
+  // 27-slot chest inventory at a position, created lazily.
+  getChest(x, y, z) {
+    const k = World.modKey(x, y, z);
+    let c = this.chests.get(k);
+    if (!c) { c = new Array(27).fill(null); this.chests.set(k, c); }
+    return c;
+  }
+  removeChest(x, y, z) { this.chests.delete(World.modKey(x, y, z)); }
   key(cx, cz) { return `${cx},${cz}`; }
 
   getChunk(cx, cz) { return this.chunks.get(this.key(cx, cz)); }

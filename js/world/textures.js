@@ -229,6 +229,23 @@ function drawTexture(id, face) {
       ctx.fillRect(4, 7, 1, 1);
       break;
     }
+    case B.CHEST: {
+      // Wood-plank base
+      fillNoise(ctx, base, 12);
+      ctx.strokeStyle = "rgba(60,40,15,0.7)";
+      ctx.strokeRect(0.5, 0.5, SIZE - 1, SIZE - 1);
+      ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(SIZE, 8); ctx.stroke();
+      // Iron bands
+      ctx.fillStyle = "#4a4a4a";
+      ctx.fillRect(0, 2, SIZE, 1);
+      ctx.fillRect(0, SIZE - 3, SIZE, 1);
+      // Lock
+      ctx.fillStyle = "#d8b340";
+      ctx.fillRect(7, 7, 2, 4);
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(7, 9, 2, 1);
+      break;
+    }
     case B.RAW_BEEF: {
       fillNoise(ctx, base, 22);
       specks(ctx, "#f0c0c0", 10); // fat
