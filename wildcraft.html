@@ -36,6 +36,33 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #87ceeb;
   font-family: monospace; color: #fff; opacity: 0.55;
   text-shadow: 1px 1px 2px #000; pointer-events: none; z-index: 6; }
 
+#settings-panel { position: fixed; inset: 0; background: rgba(15,22,30,0.96);
+  z-index: 12; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 14px; }
+#settings-panel h2 { color: #ffd479; }
+.setting-row { display: flex; flex-direction: column; gap: 6px; min-width: 320px;
+  background: rgba(255,255,255,0.05); padding: 10px 14px; border-radius: 8px;
+  border: 1px solid #444; }
+.setting-row label { font-size: 14px; }
+.setting-row em { opacity: 0.6; font-size: 12px; }
+.setting-row input[type="range"] { width: 100%; }
+.seg { display: flex; gap: 4px; }
+.seg button { padding: 6px 14px; background: #333; color: #fff; border: 1px solid #555;
+  border-radius: 4px; cursor: pointer; font-size: 14px; }
+.seg button.active { background: #4a8; border-color: #6cb; }
+.switch { position: relative; display: inline-block; width: 44px; height: 22px;
+  cursor: pointer; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch span { position: absolute; inset: 0; background: #444; border-radius: 22px;
+  transition: background 0.15s; }
+.switch span::before { content: ""; position: absolute; left: 3px; top: 3px;
+  width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: transform 0.15s; }
+.switch input:checked + span { background: #4a8; }
+.switch input:checked + span::before { transform: translateX(22px); }
+#settings-note { color: #8e8; font-size: 13px; }
+#open-settings-start { margin-top: 6px; background: #444; color: #fff;
+  border: 1px solid #666; border-radius: 6px; padding: 8px 16px; }
+
 #target-info { position: absolute; top: 50%; left: 50%;
   transform: translate(-50%, 28px); font-size: 13px; padding: 2px 8px;
   background: rgba(0,0,0,0.5); border-radius: 4px; }
@@ -95,7 +122,7 @@ label { display: inline-block; }
   </div>
   <div id="target-info" class="hidden"></div>
 </div>
-<div id="version-tag">release-window-0.14</div>
+<div id="version-tag">release-window-14.1</div>
 <div id="craft-panel" class="hidden">
   <h2>Crafting</h2>
   <div id="recipe-list"></div>
@@ -105,6 +132,35 @@ label { display: inline-block; }
   <h2>Paused</h2>
   <p>Click anywhere to resume</p>
   <button id="exit-world-btn">Save &amp; Exit World</button>
+  <button id="open-settings-pause">Settings</button>
+</div>
+<div id="settings-panel" class="hidden">
+  <h2>Settings</h2>
+  <div class="setting-row">
+    <label>Render distance: <span id="rd-val">3</span> chunks</label>
+    <input id="set-render-distance" type="range" min="2" max="8" step="1" value="3">
+  </div>
+  <div class="setting-row">
+    <label>Resolution scale:</label>
+    <div class="seg" id="set-pixel-ratio">
+      <button data-v="0.5">0.5×</button>
+      <button data-v="0.75">0.75×</button>
+      <button data-v="1">1.0×</button>
+    </div>
+  </div>
+  <div class="setting-row">
+    <label>Antialias <em>(reload to apply)</em>:</label>
+    <label class="switch"><input type="checkbox" id="set-antialias"><span></span></label>
+  </div>
+  <div class="setting-row">
+    <label>Fog:</label>
+    <label class="switch"><input type="checkbox" id="set-fog" checked><span></span></label>
+  </div>
+  <div class="setting-row" style="gap:8px;">
+    <button id="settings-apply">Apply</button>
+    <button id="settings-close">Close</button>
+  </div>
+  <p id="settings-note" class="hidden">Settings saved.</p>
 </div>
 <div id="start-screen">
   <h1>Wildcraft</h1>
@@ -124,6 +180,7 @@ label { display: inline-block; }
     </div>
   </div>
   <div id="boot-status">Loading…</div>
+  <button id="open-settings-start">Settings</button>
 </div>
 <div id="error-overlay" style="position:fixed;bottom:0;left:0;right:0;background:#400;color:#fff;padding:10px;font-family:monospace;font-size:13px;display:none;z-index:100;"></div>
 <script>
@@ -54600,16 +54657,19 @@ class World {
 // === js/engine/renderer.js ===
 (function () {
 function createRenderer(canvas) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+  const s = getSettings();
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: s.antialias, powerPreference: "high-performance" });
+  renderer.setPixelRatio(s.pixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color("#87ceeb");
-  scene.fog = new THREE.Fog("#87ceeb", 30, 80);
+  const fogFar = Math.max(40, s.renderDistance * 16 + 8);
+  scene.fog = new THREE.Fog("#87ceeb", Math.max(8, s.renderDistance * 8), s.fog ? fogFar : fogFar * 10);
 
-  const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 500);
+  const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1,
+    Math.max(80, s.renderDistance * 18 + 40));
 
   const sun = new THREE.DirectionalLight("#fff5d8", 1.05);
   sun.position.set(40, 80, 20);
@@ -55567,6 +55627,62 @@ function deleteSlot(slot) {
   window.deleteSlot = typeof deleteSlot !== 'undefined' ? deleteSlot : undefined;
 })();
 
+// === js/save/settings.js ===
+(function () {
+// Settings: persist + apply graphics/render options. Stored in localStorage
+// under `wildcraft:settings` so they survive page reloads.
+const KEY = "wildcraft:settings";
+
+const DEFAULTS = {
+  renderDistance: 3,    // chunks in each direction
+  pixelRatio: 1,        // 0.5 / 0.75 / 1.0
+  antialias: false,     // requires reload to apply
+  fog: true,
+};
+
+let current = null;
+
+function getSettings() {
+  if (current) return current;
+  try {
+    const raw = localStorage.getItem(KEY);
+    current = raw ? { ...DEFAULTS, ...JSON.parse(raw) } : { ...DEFAULTS };
+  } catch {
+    current = { ...DEFAULTS };
+  }
+  return current;
+}
+
+function saveSettings(s) {
+  current = { ...DEFAULTS, ...current, ...s };
+  try { localStorage.setItem(KEY, JSON.stringify(current)); } catch {}
+  return current;
+}
+
+// Apply runtime-applicable settings to a renderer/world/camera triple.
+function applySettings({ renderer, camera, scene }) {
+  const s = getSettings();
+  if (renderer) renderer.setPixelRatio(s.pixelRatio);
+  CONFIG.world.renderDistance = s.renderDistance;
+  if (camera) {
+    camera.far = Math.max(80, s.renderDistance * 18 + 40);
+    camera.updateProjectionMatrix();
+  }
+  if (scene && scene.fog) {
+    const near = Math.max(8, s.renderDistance * 8);
+    const far = Math.max(40, s.renderDistance * 16 + 8);
+    scene.fog.near = near;
+    scene.fog.far = s.fog ? far : far * 10; // fog off = push way out
+  }
+}
+
+
+  window.DEFAULTS = typeof DEFAULTS !== 'undefined' ? DEFAULTS : undefined;
+  window.getSettings = typeof getSettings !== 'undefined' ? getSettings : undefined;
+  window.saveSettings = typeof saveSettings !== 'undefined' ? saveSettings : undefined;
+  window.applySettings = typeof applySettings !== 'undefined' ? applySettings : undefined;
+})();
+
 // === js/main.js ===
 (function () {
 // Entry: wire renderer → world → player → mining/placing → crafting → HUD.
@@ -55873,6 +55989,7 @@ async function main() {
     world.update(player.pos.x, player.pos.z);
     hud.refresh();
     hud.setHunger(hunger);
+    applySettings({ renderer, camera, scene });
 
     startScreen.classList.add("hidden");
     hud.show(true);
@@ -55904,11 +56021,58 @@ async function main() {
   });
   resumeOverlay.addEventListener("click", () => input?.requestLock());
   $("#exit-world-btn").addEventListener("click", (e) => {
-    e.stopPropagation(); // don't also trigger resume
+    e.stopPropagation();
     doSave();
-    // Simplest clean exit: reload. Saves are already in localStorage, and the
-    // world list on the start screen reads them back fresh.
     location.reload();
+  });
+
+  // ---- Settings panel ----
+  const settingsPanel = $("#settings-panel");
+  const rdInput = $("#set-render-distance");
+  function syncSettingsUI() {
+    const s = getSettings();
+    rdInput.value = s.renderDistance;
+    $("#rd-val").textContent = s.renderDistance;
+    for (const b of document.querySelectorAll("#set-pixel-ratio button")) {
+      b.classList.toggle("active", Number(b.dataset.v) === s.pixelRatio);
+    }
+    $("#set-antialias").checked = s.antialias;
+    $("#set-fog").checked = s.fog;
+  }
+  function openSettings() {
+    syncSettingsUI();
+    settingsPanel.classList.remove("hidden");
+    document.exitPointerLock?.();
+  }
+  function closeSettings() {
+    settingsPanel.classList.add("hidden");
+    if (gameStarted && !craftOpen) showResume();
+  }
+  rdInput.addEventListener("input", () => $("#rd-val").textContent = rdInput.value);
+  for (const b of document.querySelectorAll("#set-pixel-ratio button")) {
+    b.addEventListener("click", () => {
+      for (const o of document.querySelectorAll("#set-pixel-ratio button")) o.classList.remove("active");
+      b.classList.add("active");
+    });
+  }
+  $("#settings-apply").addEventListener("click", () => {
+    const prBtn = document.querySelector("#set-pixel-ratio button.active");
+    saveSettings({
+      renderDistance: Number(rdInput.value),
+      pixelRatio: Number(prBtn?.dataset.v ?? DEFAULTS.pixelRatio),
+      antialias: $("#set-antialias").checked,
+      fog: $("#set-fog").checked,
+    });
+    applySettings({ renderer, camera, scene });
+    const note = $("#settings-note");
+    note.classList.remove("hidden");
+    setTimeout(() => note.classList.add("hidden"), 1500);
+  });
+  $("#settings-close").addEventListener("click", closeSettings);
+  $("#open-settings-start").addEventListener("click", openSettings);
+  $("#open-settings-pause").addEventListener("click", (e) => {
+    e.stopPropagation();
+    openSettings();
   });
 
   // Save on tab close / page hide.

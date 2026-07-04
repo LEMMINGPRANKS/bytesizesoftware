@@ -1,16 +1,20 @@
 import * as THREE from "three";
+import { getSettings } from "../save/settings.js";
 
 export function createRenderer(canvas) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+  const s = getSettings();
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: s.antialias, powerPreference: "high-performance" });
+  renderer.setPixelRatio(s.pixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color("#87ceeb");
-  scene.fog = new THREE.Fog("#87ceeb", 30, 80);
+  const fogFar = Math.max(40, s.renderDistance * 16 + 8);
+  scene.fog = new THREE.Fog("#87ceeb", Math.max(8, s.renderDistance * 8), s.fog ? fogFar : fogFar * 10);
 
-  const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 500);
+  const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1,
+    Math.max(80, s.renderDistance * 18 + 40));
 
   const sun = new THREE.DirectionalLight("#fff5d8", 1.05);
   sun.position.set(40, 80, 20);

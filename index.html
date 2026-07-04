@@ -16,7 +16,7 @@
   </div>
   <div id="target-info" class="hidden"></div>
 </div>
-<div id="version-tag">release-window-0.14</div>
+<div id="version-tag">release-window-14.1</div>
 <div id="craft-panel" class="hidden">
   <h2>Crafting</h2>
   <div id="recipe-list"></div>
@@ -26,6 +26,35 @@
   <h2>Paused</h2>
   <p>Click anywhere to resume</p>
   <button id="exit-world-btn">Save &amp; Exit World</button>
+  <button id="open-settings-pause">Settings</button>
+</div>
+<div id="settings-panel" class="hidden">
+  <h2>Settings</h2>
+  <div class="setting-row">
+    <label>Render distance: <span id="rd-val">3</span> chunks</label>
+    <input id="set-render-distance" type="range" min="2" max="8" step="1" value="3">
+  </div>
+  <div class="setting-row">
+    <label>Resolution scale:</label>
+    <div class="seg" id="set-pixel-ratio">
+      <button data-v="0.5">0.5×</button>
+      <button data-v="0.75">0.75×</button>
+      <button data-v="1">1.0×</button>
+    </div>
+  </div>
+  <div class="setting-row">
+    <label>Antialias <em>(reload to apply)</em>:</label>
+    <label class="switch"><input type="checkbox" id="set-antialias"><span></span></label>
+  </div>
+  <div class="setting-row">
+    <label>Fog:</label>
+    <label class="switch"><input type="checkbox" id="set-fog" checked><span></span></label>
+  </div>
+  <div class="setting-row" style="gap:8px;">
+    <button id="settings-apply">Apply</button>
+    <button id="settings-close">Close</button>
+  </div>
+  <p id="settings-note" class="hidden">Settings saved.</p>
 </div>
 <div id="start-screen">
   <h1>Wildcraft</h1>
@@ -45,6 +74,7 @@
     </div>
   </div>
   <div id="boot-status">Loading…</div>
+  <button id="open-settings-start">Settings</button>
 </div>
 <div id="error-overlay" style="position:fixed;bottom:0;left:0;right:0;background:#400;color:#fff;padding:10px;font-family:monospace;font-size:13px;display:none;z-index:100;"></div>
 <script type="importmap">

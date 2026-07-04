@@ -28,6 +28,7 @@ MODULES = [
     "js/gameplay/mobs.js",
     "js/ui/hud.js",
     "js/save/saveManager.js",
+    "js/save/settings.js",
     "js/main.js",
 ]
 

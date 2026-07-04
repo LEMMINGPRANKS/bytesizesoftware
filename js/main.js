@@ -18,6 +18,7 @@ import { atlasUV } from "./world/textures.js";
 import {
   listSlots, loadSlot, saveSlot, deleteSlot, MAX_SLOTS,
 } from "./save/saveManager.js";
+import { getSettings, saveSettings, applySettings, DEFAULTS } from "./save/settings.js";
 
 const $ = (s) => document.querySelector(s);
 
@@ -322,6 +323,7 @@ async function main() {
     world.update(player.pos.x, player.pos.z);
     hud.refresh();
     hud.setHunger(hunger);
+    applySettings({ renderer, camera, scene });
 
     startScreen.classList.add("hidden");
     hud.show(true);
@@ -353,11 +355,58 @@ async function main() {
   });
   resumeOverlay.addEventListener("click", () => input?.requestLock());
   $("#exit-world-btn").addEventListener("click", (e) => {
-    e.stopPropagation(); // don't also trigger resume
+    e.stopPropagation();
     doSave();
-    // Simplest clean exit: reload. Saves are already in localStorage, and the
-    // world list on the start screen reads them back fresh.
     location.reload();
+  });
+
+  // ---- Settings panel ----
+  const settingsPanel = $("#settings-panel");
+  const rdInput = $("#set-render-distance");
+  function syncSettingsUI() {
+    const s = getSettings();
+    rdInput.value = s.renderDistance;
+    $("#rd-val").textContent = s.renderDistance;
+    for (const b of document.querySelectorAll("#set-pixel-ratio button")) {
+      b.classList.toggle("active", Number(b.dataset.v) === s.pixelRatio);
+    }
+    $("#set-antialias").checked = s.antialias;
+    $("#set-fog").checked = s.fog;
+  }
+  function openSettings() {
+    syncSettingsUI();
+    settingsPanel.classList.remove("hidden");
+    document.exitPointerLock?.();
+  }
+  function closeSettings() {
+    settingsPanel.classList.add("hidden");
+    if (gameStarted && !craftOpen) showResume();
+  }
+  rdInput.addEventListener("input", () => $("#rd-val").textContent = rdInput.value);
+  for (const b of document.querySelectorAll("#set-pixel-ratio button")) {
+    b.addEventListener("click", () => {
+      for (const o of document.querySelectorAll("#set-pixel-ratio button")) o.classList.remove("active");
+      b.classList.add("active");
+    });
+  }
+  $("#settings-apply").addEventListener("click", () => {
+    const prBtn = document.querySelector("#set-pixel-ratio button.active");
+    saveSettings({
+      renderDistance: Number(rdInput.value),
+      pixelRatio: Number(prBtn?.dataset.v ?? DEFAULTS.pixelRatio),
+      antialias: $("#set-antialias").checked,
+      fog: $("#set-fog").checked,
+    });
+    applySettings({ renderer, camera, scene });
+    const note = $("#settings-note");
+    note.classList.remove("hidden");
+    setTimeout(() => note.classList.add("hidden"), 1500);
+  });
+  $("#settings-close").addEventListener("click", closeSettings);
+  $("#open-settings-start").addEventListener("click", openSettings);
+  $("#open-settings-pause").addEventListener("click", (e) => {
+    e.stopPropagation();
+    openSettings();
   });
 
   // Save on tab close / page hide.
