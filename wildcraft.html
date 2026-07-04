@@ -54168,6 +54168,14 @@ function generateChunk(cx, cz, noise) {
             }
           }
         }
+
+        // Caves: tunnels carved by 3D noise. Two noises multiplied → wormy veins
+        // instead of blobs. Only carve below surface so the ground stays solid.
+        if (id === B.STONE && y < surface - 2 && y > 1) {
+          const a = noise.noise3(wx * 0.05, y * 0.08, wz * 0.05);
+          const b = noise.noise3(wx * 0.13 + 500, y * 0.13, wz * 0.13 - 500);
+          if (a < 0.18 && b < 0.4) id = B.AIR;
+        }
         chunk.blocks[chunk.idx(x, y, z)] = id;
       }
       // Water fill up to sea level.
