@@ -2,3 +2,7 @@
 node_modules/
 *.log
 wildcraft.html.zip
+
+# Playtest bundle distributed separately
+libaries/
+libaries.zip

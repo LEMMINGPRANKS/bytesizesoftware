@@ -352,6 +352,13 @@ async function main() {
     }
   });
   resumeOverlay.addEventListener("click", () => input?.requestLock());
+  $("#exit-world-btn").addEventListener("click", (e) => {
+    e.stopPropagation(); // don't also trigger resume
+    doSave();
+    // Simplest clean exit: reload. Saves are already in localStorage, and the
+    // world list on the start screen reads them back fresh.
+    location.reload();
+  });
 
   // Save on tab close / page hide.
   window.addEventListener("beforeunload", () => doSave());
