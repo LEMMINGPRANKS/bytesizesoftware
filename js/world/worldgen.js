@@ -30,8 +30,9 @@ export function generateChunk(cx, cz, noise) {
       // Layered height: gentle hills + occasional dramatic mountains.
       let hill = (noise.height(sx * 0.012, sz * 0.012, 5) - 0.5) * 2;
       const mtnNoise = noise.height(sx * 0.005 + 100, sz * 0.005 - 50, 3);
-      const mtnMask = Math.max(0, mtnNoise - 0.55) / 0.45;
-      const mtn = mtnMask * mtnMask;
+      const mtnMask = Math.max(0, mtnNoise - 0.6) / 0.4;
+      // Higher power → flatter plains with sharper dramatic peaks.
+      const mtn = mtnMask * mtnMask * mtnMask * mtnMask;
 
       // Continent mask — smooth, continuous. `oceanFactor` runs 0 (deep
       // ocean) → 1 (interior) and is squared for flatter seabeds. No hard

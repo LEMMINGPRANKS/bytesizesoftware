@@ -65,38 +65,69 @@ function addCross(layer, x, y, z, id, w, h) {
   }
 }
 
-// Adds a torch as two crossed quads centered in the cell, smaller than full block.
+// Adds a 3D torch: a thin stick box with a small flame cube on top. Both
+// pieces sample the torch texture (which already has a brown stick and an
+// orange flame). Real lighting comes from a PointLight pool in main.js that
+// tracks the nearest torches.
+function addBox(layer, x0, y0, z0, x1, y1, z1, id, faceIdx = 2) {
+  const [u0, v0, u1, v1] = atlasUV(id, faceIdx);
+  const faces = [
+    { dir: [ 1, 0, 0], corners: [[x1,y0,z1],[x1,y1,z1],[x1,y1,z0],[x1,y0,z0]] },
+    { dir: [-1, 0, 0], corners: [[x0,y0,z0],[x0,y1,z0],[x0,y1,z1],[x0,y0,z1]] },
+    { dir: [ 0, 1, 0], corners: [[x0,y1,z1],[x1,y1,z1],[x1,y1,z0],[x0,y1,z0]] },
+    { dir: [ 0,-1, 0], corners: [[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]] },
+    { dir: [ 0, 0, 1], corners: [[x0,y0,z1],[x0,y1,z1],[x1,y1,z1],[x1,y0,z1]] },
+    { dir: [ 0, 0,-1], corners: [[x1,y0,z0],[x1,y1,z0],[x0,y1,z0],[x0,y0,z0]] },
+  ];
+  for (const f of faces) {
+    const vi = layer.positions.length / 3;
+    for (const c of f.corners) layer.positions.push(c[0], c[1], c[2]);
+    for (let i = 0; i < 4; i++) layer.normals.push(f.dir[0], f.dir[1], f.dir[2]);
+    layer.uvs.push(u0, v1, u0, v0, u1, v0, u1, v1);
+    layer.indices.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+  }
+}
 function addTorch(layer, x, y, z, id) {
-  const cx = x + 0.5, cz = z + 0.5;
-  const w = 0.18;           // half-width at top/bottom
-  const baseY = y, topY = y + 0.65;
-  const [u0, v0, u1, v1] = atlasUV(id, 2);  // use "top" face UVs
+  // Stick: thin vertical box from y=0 to y=0.55, centered in the cell.
+  addBox(layer, x + 0.43, y + 0.00, z + 0.43, x + 0.57, y + 0.55, z + 0.57, id);
+  // Flame head: slightly wider cube on top so it reads as fire from any angle.
+  addBox(layer, x + 0.38, y + 0.55, z + 0.38, x + 0.62, y + 0.72, z + 0.62, id);
+}
 
-  // Plane 1: diagonal +x+z to -x-z
-  let vIdx = layer.positions.length / 3;
-  const pts1 = [
-    [cx - w, baseY, cz - w],
-    [cx - w, topY,  cz - w],
-    [cx + w, topY,  cz + w],
-    [cx + w, baseY, cz + w],
-  ];
-  for (const p of pts1) layer.positions.push(p[0], p[1], p[2]);
-  for (let i = 0; i < 4; i++) layer.normals.push(0, 0, 1);
-  layer.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
-  layer.indices.push(vIdx, vIdx + 1, vIdx + 2, vIdx, vIdx + 2, vIdx + 3);
-
-  // Plane 2: diagonal -x+z to +x-z
-  vIdx = layer.positions.length / 3;
-  const pts2 = [
-    [cx + w, baseY, cz - w],
-    [cx + w, topY,  cz - w],
-    [cx - w, topY,  cz + w],
-    [cx - w, baseY, cz + w],
-  ];
-  for (const p of pts2) layer.positions.push(p[0], p[1], p[2]);
-  for (let i = 0; i < 4; i++) layer.normals.push(0, 0, 1);
-  layer.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
-  layer.indices.push(vIdx, vIdx + 1, vIdx + 2, vIdx, vIdx + 2, vIdx + 3);
+// Door panel — thin slab (0.15 thick) that spans the cell. Two quads (front +
+// back). Orientation depends on whether the door is open: closed = panel in
+// the Z=0 plane (faces ±Z); open = swung to the X=0 plane (faces ±X).
+function addDoor(layer, x, y, z, id, isOpen) {
+  const [u0, v0, u1, v1] = atlasUV(id, 2);
+  let minA, maxA, minB, maxB;
+  if (isOpen) {
+    // Panel runs along Z; occupies x≈0..0.15
+    minA = [x + 0.0,  y, z + 0.0];
+    maxA = [x + 0.15, y + 1, z + 1.0];
+  } else {
+    // Panel runs along X; occupies z≈0..0.15
+    minA = [x + 0.0,  y, z + 0.0];
+    maxA = [x + 1.0,  y + 1, z + 0.15];
+  }
+  const quad = (a, b, c, d, nx, ny, nz) => {
+    const vi = layer.positions.length / 3;
+    for (const p of [a, b, c, d]) layer.positions.push(p[0], p[1], p[2]);
+    for (let i = 0; i < 4; i++) layer.normals.push(nx, ny, nz);
+    layer.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
+    layer.indices.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+  };
+  // Front + back face of the thin slab.
+  if (isOpen) {
+    quad([minA[0], minA[1], minA[2]], [minA[0], maxA[1], minA[2]],
+         [minA[0], maxA[1], maxA[2]], [minA[0], minA[1], maxA[2]], -1, 0, 0);
+    quad([maxA[0], minA[1], maxA[2]], [maxA[0], maxA[1], maxA[2]],
+         [maxA[0], maxA[1], minA[2]], [maxA[0], minA[1], minA[2]], 1, 0, 0);
+  } else {
+    quad([minA[0], minA[1], minA[2]], [maxA[0], minA[1], minA[2]],
+         [maxA[0], maxA[1], minA[2]], [minA[0], maxA[1], minA[2]], 0, 0, -1);
+    quad([minA[0], maxA[1], maxA[2]], [maxA[0], maxA[1], maxA[2]],
+         [maxA[0], minA[1], maxA[2]], [minA[0], minA[1], maxA[2]], 0, 0, 1);
+  }
 }
 
 export function buildChunkMesh(chunk, world) {
@@ -121,6 +152,13 @@ export function buildChunkMesh(chunk, world) {
         // Decor: torches and seagrass render as crossed quads.
         if (id === B.TORCH) {
           addTorch(transparent, x, y, z, id);
+          continue;
+        }
+        if (id === B.DOOR || id === B.DOOR_TOP) {
+          // Open/closed state lives on the bottom block (same x,z; y-1 for top).
+          const baseY = id === B.DOOR ? y : y - 1;
+          const isOpen = world.isDoorOpen(baseX + x, baseY, baseZ + z);
+          addDoor(transparent, x, y, z, id, isOpen);
           continue;
         }
         if (id === B.SEAGRASS) {

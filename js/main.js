@@ -4,6 +4,7 @@ import { CONFIG } from "./config.js";
 import { createRenderer } from "./engine/renderer.js";
 import { Loop } from "./engine/loop.js";
 import { Input } from "./engine/input.js";
+import { DayNight } from "./engine/daynight.js";
 import { World } from "./world/world.js";
 import { Player } from "./entities/player.js";
 import { MiningController, raycastVoxel } from "./gameplay/mining.js";
@@ -35,7 +36,47 @@ async function main() {
     const canvas = document.createElement("canvas");
     root.appendChild(canvas);
 
-  const { renderer, scene, camera } = createRenderer(canvas);
+  const { renderer, scene, camera, sun, ambient, hemi } = createRenderer(canvas);
+  const dayNight = new DayNight(scene, camera, sun, ambient, hemi);
+
+  // Torch light pool. Each torch in the world is eligible to drive one of
+  // these PointLights; we reassign them to the nearest N torches each tick.
+  // Capped because Three.js re-renders every lit face per light — too many
+  // lights tanks FPS.
+  const TORCH_LIGHT_COUNT = 6;
+  const TORCH_LIGHT_RANGE = 12;
+  const TORCH_LIGHT_INTENSITY = 1.6;
+  const torchLights = [];
+  for (let i = 0; i < TORCH_LIGHT_COUNT; i++) {
+    const l = new THREE.PointLight("#ffb060", 0, TORCH_LIGHT_RANGE, 2.0);
+    scene.add(l);
+    torchLights.push(l);
+  }
+  let torchLightAcc = 0;
+  function updateTorchLights(playerPos) {
+    const candidates = [];
+    for (const key of world.torches) {
+      const parts = key.split(",");
+      const tx = +parts[0], ty = +parts[1], tz = +parts[2];
+      const dx = tx + 0.5 - playerPos.x;
+      const dy = ty + 0.4 - playerPos.y;
+      const dz = tz + 0.5 - playerPos.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 > TORCH_LIGHT_RANGE * TORCH_LIGHT_RANGE * 1.5) continue;
+      candidates.push({ x: tx + 0.5, y: ty + 0.45, z: tz + 0.5, d2 });
+    }
+    candidates.sort((a, b) => a.d2 - b.d2);
+    for (let i = 0; i < TORCH_LIGHT_COUNT; i++) {
+      const tl = torchLights[i];
+      const c = candidates[i];
+      if (c) {
+        tl.position.set(c.x, c.y, c.z);
+        tl.intensity = TORCH_LIGHT_INTENSITY;
+      } else {
+        tl.intensity = 0;
+      }
+    }
+  }
   // World/player/etc. are created when a slot is chosen — seed depends on slot.
   let world, player, input, mining, trees, mobs, inv, hud;
   let hunger = 20;
@@ -84,6 +125,7 @@ async function main() {
       hunger,
       modified: Object.fromEntries(world.modified),
       chests: Object.fromEntries(world.chests),
+      doors: Array.from(world.doors),
     };
   }
 
@@ -120,33 +162,70 @@ async function main() {
         world.removeChest(x, y, z);
       }
     }
+    // Breaking either half of a door drops one door item and clears the other.
+    if (id === B.DOOR) {
+      if (world.getBlock(x, y + 1, z) === B.DOOR_TOP) world.setBlock(x, y + 1, z, B.AIR);
+      world.doors.delete(`${x},${y},${z}`);
+    } else if (id === B.DOOR_TOP) {
+      if (world.getBlock(x, y - 1, z) === B.DOOR) {
+        world.setBlock(x, y - 1, z, B.AIR);
+        world.doors.delete(`${x},${y - 1},${z}`);
+      }
+      // The top half isn't a placeable item — drop a regular door instead.
+      if (drop) { inv.remove(B.DOOR_TOP, 1); inv.add(B.DOOR, 1); }
+    }
     hud.refresh();
     return true;
   }
 
   function placeBlock() {
+    const t = mining.acquire(player);
+    if (t) {
+      const hitId = world.getBlock(t.x, t.y, t.z);
+      const hitDef = BLOCKS[hitId];
+      // Right-clicking an interactive block always uses it, even with a tool
+      // or food selected — otherwise you couldn't open chests while holding
+      // a pickaxe.
+      if (hitDef?.interactive) {
+        if (hitId === B.CHEST) { openChest(t.x, t.y, t.z); return; }
+        if (hitId === B.DOOR)  { toggleDoorAt(t.x, t.y, t.z); return; }
+      }
+    }
     const sel = inv.selected();
     if (sel === null) return;
     const def = BLOCKS[sel];
     if (def?.food) { eat(sel); return; }
     if (def?.item) return; // don't place tools/items in the world
-    const t = mining.acquire(player);
     if (!t) return;
-    // Right-clicking an interactive block (chest) opens it instead of placing.
-    if (BLOCKS[world.getBlock(t.x, t.y, t.z)]?.interactive) {
-      openChest(t.x, t.y, t.z);
-      return;
-    }
     const px = t.x + t.face[0], py = t.y + t.face[1], pz = t.z + t.face[2];
     if (py < 0 || py >= CONFIG.world.chunkHeight) return;
     const minX = player.pos.x - player.half, maxX = player.pos.x + player.half;
     const minY = player.pos.y, maxY = player.pos.y + player.height;
     const minZ = player.pos.z - player.half, maxZ = player.pos.z + player.half;
-    if (px + 1 > minX && px < maxX && py + 1 > minY && py < maxY && pz + 1 > minZ && pz < maxZ) return;
+    // Doors are 2 cells tall — extend the AABB overlap check upward.
+    const cellTop = (sel === B.DOOR) ? py + 2 : py + 1;
+    if (px + 1 > minX && px < maxX && cellTop > minY && py < maxY && pz + 1 > minZ && pz < maxZ) return;
     if (world.getBlock(px, py, pz) !== B.AIR) return;
+    // Doors occupy 2 vertical cells — bail if the head cell is blocked.
+    if (sel === B.DOOR) {
+      if (py + 1 >= CONFIG.world.chunkHeight) return;
+      if (world.getBlock(px, py + 1, pz) !== B.AIR) return;
+    }
     world.setBlock(px, py, pz, sel);
+    if (sel === B.DOOR) world.setBlock(px, py + 1, pz, B.DOOR_TOP);
     inv.remove(sel, 1);
     hud.refresh();
+  }
+  function toggleDoorAt(x, y, z) {
+    // `y` may be either half of the door — find the bottom.
+    let by = y;
+    if (world.getBlock(x, y, z) === B.DOOR_TOP) by = y - 1;
+    if (world.getBlock(x, by, z) !== B.DOOR) return;
+    world.toggleDoor(x, by, z);
+    // Re-mesh the chunk(s) that contain the door so the panel swings.
+    const cx = Math.floor(x / CONFIG.world.chunkSize), cz = Math.floor(z / CONFIG.world.chunkSize);
+    const c = world.getChunk(cx, cz);
+    if (c) c.dirty = true;
   }
 
   function eat(id) {
@@ -201,6 +280,48 @@ async function main() {
   let invOpen = false;
   let invCarried = null; // {id} when dragging a stack between slots
   let pendingNewSlot = null;
+
+  // Floating ghost item that follows the cursor during drag-and-drop.
+  const carriedGhost = $("#carried-ghost");
+  function getCarried() {
+    return invCarried || chestCarried;
+  }
+  function setCarried(c) {
+    if (chestOpen) chestCarried = c;
+    else invCarried = c;
+  }
+  function refreshGhost() {
+    const c = getCarried();
+    if (!c) { carriedGhost.style.display = "none"; return; }
+    const tex = getTexture(c.id, "side");
+    carriedGhost.style.backgroundImage = `url(${tex.image.toDataURL?.() || tex.image.src})`;
+    carriedGhost.style.display = "block";
+    carriedGhost.textContent = "";
+  }
+  document.addEventListener("mousemove", (e) => {
+    if (carriedGhost.style.display === "block") {
+      carriedGhost.style.transform = `translate(${e.clientX + 6}px, ${e.clientY + 6}px)`;
+    }
+  });
+  let dragSource = null; // slot element where current drag started
+  function bindSlotEvents(slot, pickFn, dropFn) {
+    slot.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      pickFn();
+      dragSource = slot;
+      refreshGhost();
+    });
+    slot.addEventListener("mouseup", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      // Drop on the slot under the cursor. If that's the same slot we picked
+      // up from, dropFn just puts the item back — a no-op drag.
+      dropFn();
+      dragSource = null;
+      refreshGhost();
+    });
+  }
 
   // Pre-warm the texture atlas up front so it's ready when a world loads.
   for (const idStr of Object.keys(BLOCKS)) {
@@ -355,6 +476,14 @@ async function main() {
     if (saved && saved.chests) {
       for (const [k, v] of Object.entries(saved.chests)) world.chests.set(k, v);
     }
+    if (saved && saved.doors) {
+      for (const k of saved.doors) world.doors.add(k);
+    }
+    // Rebuild the torch index from persisted block edits so the light pool
+    // works immediately on load.
+    for (const [k, v] of world.modified) {
+      if (v === B.TORCH) world.torches.add(k);
+    }
 
     // Pre-generate spawn chunks so player has ground.
     for (let dx = -1; dx <= 1; dx++)
@@ -496,7 +625,7 @@ async function main() {
       s.className = "inv-slot hotbar";
       s.dataset.kind = "hotbar";
       s.dataset.idx = i;
-      s.addEventListener("click", () => onInvSlotClick("hotbar", i));
+      bindSlotEvents(s, () => onInvSlotPick("hotbar", i), () => onInvSlotDrop("hotbar", i));
       invHotbar.append(s);
     }
     for (let i = 0; i < 27; i++) {
@@ -504,7 +633,7 @@ async function main() {
       s.className = "inv-slot";
       s.dataset.kind = "main";
       s.dataset.idx = i;
-      s.addEventListener("click", () => onInvSlotClick("main", i));
+      bindSlotEvents(s, () => onInvSlotPick("main", i), () => onInvSlotDrop("main", i));
       invGrid.append(s);
     }
   }
@@ -535,6 +664,28 @@ async function main() {
   function onInvSlotClick(kind, idx) {
     const arr = kind === "hotbar" ? inv.hotbar : inv.main;
     invCarried = inv.swapWith(arr, idx, invCarried);
+    hud.refresh();
+    refreshInvPanel();
+  }
+  // mousedown: pick up the slot's contents (only if nothing already carried).
+  function onInvSlotPick(kind, idx) {
+    if (invCarried) return;
+    const arr = kind === "hotbar" ? inv.hotbar : inv.main;
+    const cur = arr[idx];
+    if (cur == null) return;
+    invCarried = { id: cur };
+    arr[idx] = null;
+    hud.refresh();
+    refreshInvPanel();
+  }
+  // mouseup: drop the carried item into the slot (swap if occupied).
+  function onInvSlotDrop(kind, idx) {
+    if (!invCarried) return;
+    const arr = kind === "hotbar" ? inv.hotbar : inv.main;
+    const cur = arr[idx];
+    if (cur == null) { arr[idx] = invCarried.id; invCarried = null; }
+    else if (cur === invCarried.id) { invCarried = null; }
+    else { arr[idx] = invCarried.id; invCarried = { id: cur }; }
     hud.refresh();
     refreshInvPanel();
   }
@@ -569,7 +720,7 @@ async function main() {
       s.className = "inv-slot";
       s.dataset.kind = "chest";
       s.dataset.idx = i;
-      s.addEventListener("click", () => onChestSlotClick("chest", i));
+      bindSlotEvents(s, () => onChestSlotPick("chest", i), () => onChestSlotDrop("chest", i));
       chestGrid.append(s);
     }
     for (let i = 0; i < 27; i++) {
@@ -577,7 +728,7 @@ async function main() {
       s.className = "inv-slot";
       s.dataset.kind = "main";
       s.dataset.idx = i;
-      s.addEventListener("click", () => onChestSlotClick("main", i));
+      bindSlotEvents(s, () => onChestSlotPick("main", i), () => onChestSlotDrop("main", i));
       chestPlayerGrid.append(s);
     }
     for (let i = 0; i < 9; i++) {
@@ -585,7 +736,7 @@ async function main() {
       s.className = "inv-slot hotbar";
       s.dataset.kind = "hotbar";
       s.dataset.idx = i;
-      s.addEventListener("click", () => onChestSlotClick("hotbar", i));
+      bindSlotEvents(s, () => onChestSlotPick("hotbar", i), () => onChestSlotDrop("hotbar", i));
       chestPlayerHotbar.append(s);
     }
   }
@@ -632,6 +783,33 @@ async function main() {
       const arr = kind === "hotbar" ? inv.hotbar : inv.main;
       invCarried = inv.swapWith(arr, idx, invCarried);
     }
+    hud.refresh();
+    refreshChestPanel();
+  }
+  // Resolve a chest-panel slot to its underlying array.
+  function chestArrFor(kind) {
+    if (kind === "chest") return chestPos ? world.getChest(chestPos.x, chestPos.y, chestPos.z) : null;
+    return kind === "hotbar" ? inv.hotbar : inv.main;
+  }
+  function onChestSlotPick(kind, idx) {
+    if (chestCarried) return;
+    const arr = chestArrFor(kind);
+    if (!arr) return;
+    const cur = arr[idx];
+    if (cur == null) return;
+    chestCarried = { id: cur };
+    arr[idx] = null;
+    hud.refresh();
+    refreshChestPanel();
+  }
+  function onChestSlotDrop(kind, idx) {
+    if (!chestCarried) return;
+    const arr = chestArrFor(kind);
+    if (!arr) return;
+    const cur = arr[idx];
+    if (cur == null) { arr[idx] = chestCarried.id; chestCarried = null; }
+    else if (cur === chestCarried.id) { chestCarried = null; }
+    else { arr[idx] = chestCarried.id; chestCarried = { id: cur }; }
     hud.refresh();
     refreshChestPanel();
   }
@@ -752,6 +930,16 @@ async function main() {
     attackCooldown = Math.max(0, attackCooldown - dt);
 
     player.update(dt, input);
+
+    dayNight.update(dt);
+
+    // Reassign torch lights to the nearest torches a few times per second —
+    // doing it every frame is wasteful since torches don't move.
+    torchLightAcc += dt;
+    if (torchLightAcc >= 0.1) {
+      torchLightAcc = 0;
+      updateTorchLights(player.pos);
+    }
 
     if (input.mouseJust[0]) attack();
     const miningAim = !mobs.raycast(player.eyePos(), player.lookDir(), CONFIG.mining.range + 1);

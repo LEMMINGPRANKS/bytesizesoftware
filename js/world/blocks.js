@@ -11,6 +11,7 @@ export const B = {
   PICKAXE_STONE: 33,
   SEAGRASS: 34, RAW_FISH: 35, COOKED_FISH: 36,
   CHEST: 37,
+  DOOR: 38, DOOR_TOP: 39,
 };
 
 export const BLOCKS = {
@@ -35,6 +36,8 @@ export const BLOCKS = {
   [B.RAW_FISH]: { name: "raw_fish", solid: false, hardness: 0.1, color: "#c8d8e0", item: true, food: 2 },
   [B.COOKED_FISH]: { name: "cooked_fish", solid: false, hardness: 0.1, color: "#e8c890", item: true, food: 7 },
   [B.CHEST]: { name: "chest", solid: true, hardness: 1.0, color: "#8a5a2a", interactive: true },
+  [B.DOOR]: { name: "door", solid: true, hardness: 1.0, color: "#a07a3a", interactive: true, transparent: true, door: true },
+  [B.DOOR_TOP]: { name: "door_top", solid: false, hardness: 1.0, color: "#a07a3a", transparent: true, decor: true, door: true },
   [B.COBBLE]: { name: "cobble", solid: true, hardness: 1.8, color: "#7c7c80", toolTier: 1 },
   [B.WALL_STONE]: { name: "wall_stone", solid: true, hardness: 3.0, color: "#6e6e72", toolTier: 1 },
   [B.BRICK]: { name: "brick", solid: true, hardness: 2.5, color: "#a23a2a", toolTier: 1 },

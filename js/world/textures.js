@@ -21,14 +21,22 @@ function hexToRgb(h) {
 function rgb(r, g, b, a = 1) {
   return `rgba(${r|0},${g|0},${b|0},${a})`;
 }
+// Global brightness lift — pushes every base colour up so the world reads
+// as daylight rather than overcast. Tuned to keep saturated ores bright
+// without blowing out highlights.
+const BRIGHT_LIFT = 22;
+function lift(rgbIn) {
+  return rgbIn.map((v) => Math.max(0, Math.min(255, v + BRIGHT_LIFT)));
+}
 function vary(rgbIn, amt) {
-  return rgbIn.map((v) => Math.max(0, Math.min(255, v + (Math.random() * 2 - 1) * amt)));
+  return rgbIn.map((v) => Math.max(0, Math.min(255, v + BRIGHT_LIFT + (Math.random() * 2 - 1) * amt)));
 }
 
 function fillNoise(ctx, base, amp = 30, spec = SIZE) {
+  const b = lift(base);
   for (let y = 0; y < spec; y++) {
     for (let x = 0; x < spec; x++) {
-      const c = vary(base, amp);
+      const c = b.map((v, i) => Math.max(0, Math.min(255, v + (Math.random() * 2 - 1) * amp)));
       ctx.fillStyle = rgb(c[0], c[1], c[2]);
       ctx.fillRect(x, y, 1, 1);
     }
@@ -244,6 +252,24 @@ function drawTexture(id, face) {
       ctx.fillRect(7, 7, 2, 4);
       ctx.fillStyle = "#1a1a1a";
       ctx.fillRect(7, 9, 2, 1);
+      break;
+    }
+    case B.DOOR:
+    case B.DOOR_TOP: {
+      // Plank vertical grain door.
+      fillNoise(ctx, base, 12);
+      ctx.fillStyle = "rgba(60,40,15,0.7)";
+      ctx.fillRect(0, 0, 1, SIZE);
+      ctx.fillRect(SIZE - 1, 0, 1, SIZE);
+      // Vertical plank seams
+      ctx.fillStyle = "rgba(40,25,10,0.5)";
+      ctx.fillRect(5, 0, 1, SIZE);
+      ctx.fillRect(10, 0, 1, SIZE);
+      // Handle on bottom half only
+      if (id === B.DOOR) {
+        ctx.fillStyle = "#d8b340";
+        ctx.fillRect(12, 8, 2, 2);
+      }
       break;
     }
     case B.RAW_BEEF: {

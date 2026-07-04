@@ -19,6 +19,8 @@ export class World {
     this.treesHealth = new Map(); // `${wx},${wy},${wz}` -> hp
     this.modified = new Map();   // `${wx},${wy},${wz}` -> blockId (player edits)
     this.chests = new Map();     // `${wx},${wy},${wz}` -> Array(27) of slot ids or null
+    this.doors = new Set();      // `${bx},${by},${bz}` (bottom block) of open doors
+    this.torches = new Set();    // `${wx},${wy},${wz}` of placed torches
   }
   static modKey(x, y, z) { return `${x},${y},${z}`; }
   // 27-slot chest inventory at a position, created lazily.
@@ -29,6 +31,13 @@ export class World {
     return c;
   }
   removeChest(x, y, z) { this.chests.delete(World.modKey(x, y, z)); }
+  // Door open/closed state. `bx,by,bz` is the BOTTOM block of the door.
+  isDoorOpen(bx, by, bz) { return this.doors.has(`${bx},${by},${bz}`); }
+  toggleDoor(bx, by, bz) {
+    const k = `${bx},${by},${bz}`;
+    if (this.doors.has(k)) this.doors.delete(k);
+    else this.doors.add(k);
+  }
   key(cx, cz) { return `${cx},${cz}`; }
 
   getChunk(cx, cz) { return this.chunks.get(this.key(cx, cz)); }
@@ -69,8 +78,13 @@ export class World {
     const cx = Math.floor(wx / CHUNK_SIZE), cz = Math.floor(wz / CHUNK_SIZE);
     const c = this.ensureChunk(cx, cz);
     const lx = wx - cx * CHUNK_SIZE, lz = wz - cz * CHUNK_SIZE;
+    const k = World.modKey(wx, wy, wz);
+    // Keep the torch index in sync with player edits so the light pool can
+    // find them quickly without scanning the whole modified map each frame.
+    if (v === B.TORCH) this.torches.add(k);
+    else if (this.torches.has(k)) this.torches.delete(k);
     c.set(lx, wy, lz, v);
-    this.modified.set(World.modKey(wx, wy, wz), v);
+    this.modified.set(k, v);
     // mark neighbours dirty if on border
     if (lx === 0) { const n = this.getChunk(cx - 1, cz); if (n) n.dirty = true; }
     if (lx === CHUNK_SIZE - 1) { const n = this.getChunk(cx + 1, cz); if (n) n.dirty = true; }

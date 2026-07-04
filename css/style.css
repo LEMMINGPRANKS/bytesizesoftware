@@ -82,6 +82,11 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #87ceeb;
   gap: 6px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 8px; }
 #inv-hotbar { margin-top: 8px; }
 
+#carried-ghost { position: fixed; top: 0; left: 0; width: 48px; height: 48px;
+  pointer-events: none; z-index: 50; background-size: contain; background-position: center;
+  background-repeat: no-repeat; display: none; transform: translate(8px, 8px);
+  font-size: 13px; color: #fff; text-shadow: 1px 1px 2px #000; padding: 28px 0 0 4px; }
+
 #chest-panel { position: fixed; inset: 0; background: rgba(15,22,30,0.96); z-index: 11;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 8px; }

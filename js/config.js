@@ -7,7 +7,8 @@ export const CONFIG = {
     seaLevel: 14,
     baseHeight: 22,
     hillHeight: 20,
-    mountainHeight: 45,   // peaks when mountain noise is high
+    mountainHeight: 90,   // peaks when mountain noise is high
+    dayLengthSeconds: 600, // 10 real minutes per in-game day
   },
   player: {
     eyeHeight: 1.6,

@@ -32,5 +32,5 @@ export function createRenderer(canvas) {
   }
   window.addEventListener("resize", onResize);
 
-  return { renderer, scene, camera, sun };
+  return { renderer, scene, camera, sun, ambient, hemi };
 }

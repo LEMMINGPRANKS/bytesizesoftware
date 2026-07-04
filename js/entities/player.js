@@ -66,8 +66,13 @@ export class Player {
     const z0 = Math.floor(wz - this.half), z1 = Math.floor(wz + this.half);
     for (let x = x0; x <= x1; x++)
       for (let y = y0; y <= y1; y++)
-        for (let z = z0; z <= z1; z++)
-          if (isSolid(this.world.getBlock(x, y, z))) return true;
+        for (let z = z0; z <= z1; z++) {
+          const id = this.world.getBlock(x, y, z);
+          if (!isSolid(id)) continue;
+          // Open doors are visually present but passable.
+          if (id === B.DOOR && this.world.isDoorOpen(x, y, z)) continue;
+          return true;
+        }
     return false;
   }
 

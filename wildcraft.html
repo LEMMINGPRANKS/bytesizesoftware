@@ -88,6 +88,11 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #87ceeb;
   gap: 6px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 8px; }
 #inv-hotbar { margin-top: 8px; }
 
+#carried-ghost { position: fixed; top: 0; left: 0; width: 48px; height: 48px;
+  pointer-events: none; z-index: 50; background-size: contain; background-position: center;
+  background-repeat: no-repeat; display: none; transform: translate(8px, 8px);
+  font-size: 13px; color: #fff; text-shadow: 1px 1px 2px #000; padding: 28px 0 0 4px; }
+
 #chest-panel { position: fixed; inset: 0; background: rgba(15,22,30,0.96); z-index: 11;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 8px; }
@@ -138,6 +143,7 @@ label { display: inline-block; }
 </head>
 <body>
 <div id="game-root"></div>
+<div id="carried-ghost"></div>
 <div id="hud" class="hidden">
   <div id="crosshair"></div>
   <div id="hotbar"></div>
@@ -146,7 +152,7 @@ label { display: inline-block; }
   </div>
   <div id="target-info" class="hidden"></div>
 </div>
-<div id="version-tag">0.18.1</div>
+<div id="version-tag">1.0.2</div>
 <div id="craft-panel" class="hidden">
   <h2>Crafting</h2>
   <div id="recipe-list"></div>
@@ -202,7 +208,7 @@ label { display: inline-block; }
 </div>
 <div id="start-screen">
   <h1>Wildcraft</h1>
-  <p>WASD move · Space jump · Mouse look · Left click mine/attack · Right click/Q place/eat · 1-9 hotbar · E craft · Tab inventory · R open nearby chest</p>
+  <p>WASD move · Space jump · Mouse look · Left click mine/attack · Right click/Q place/eat/use · 1-9 hotbar · E craft · Tab inventory · R open nearby chest · right-click door to open/close</p>
   <h2>Pick a World</h2>
   <div id="world-list"></div>
   <div id="new-world-form" class="hidden">
@@ -53716,7 +53722,8 @@ const CONFIG = {
     seaLevel: 14,
     baseHeight: 22,
     hillHeight: 20,
-    mountainHeight: 45,   // peaks when mountain noise is high
+    mountainHeight: 90,   // peaks when mountain noise is high
+    dayLengthSeconds: 600, // 10 real minutes per in-game day
   },
   player: {
     eyeHeight: 1.6,
@@ -53764,6 +53771,7 @@ const B = {
   PICKAXE_STONE: 33,
   SEAGRASS: 34, RAW_FISH: 35, COOKED_FISH: 36,
   CHEST: 37,
+  DOOR: 38, DOOR_TOP: 39,
 };
 
 const BLOCKS = {
@@ -53788,6 +53796,8 @@ const BLOCKS = {
   [B.RAW_FISH]: { name: "raw_fish", solid: false, hardness: 0.1, color: "#c8d8e0", item: true, food: 2 },
   [B.COOKED_FISH]: { name: "cooked_fish", solid: false, hardness: 0.1, color: "#e8c890", item: true, food: 7 },
   [B.CHEST]: { name: "chest", solid: true, hardness: 1.0, color: "#8a5a2a", interactive: true },
+  [B.DOOR]: { name: "door", solid: true, hardness: 1.0, color: "#a07a3a", interactive: true, transparent: true, door: true },
+  [B.DOOR_TOP]: { name: "door_top", solid: false, hardness: 1.0, color: "#a07a3a", transparent: true, decor: true, door: true },
   [B.COBBLE]: { name: "cobble", solid: true, hardness: 1.8, color: "#7c7c80", toolTier: 1 },
   [B.WALL_STONE]: { name: "wall_stone", solid: true, hardness: 3.0, color: "#6e6e72", toolTier: 1 },
   [B.BRICK]: { name: "brick", solid: true, hardness: 2.5, color: "#a23a2a", toolTier: 1 },
@@ -53900,14 +53910,22 @@ function hexToRgb(h) {
 function rgb(r, g, b, a = 1) {
   return `rgba(${r|0},${g|0},${b|0},${a})`;
 }
+// Global brightness lift — pushes every base colour up so the world reads
+// as daylight rather than overcast. Tuned to keep saturated ores bright
+// without blowing out highlights.
+const BRIGHT_LIFT = 22;
+function lift(rgbIn) {
+  return rgbIn.map((v) => Math.max(0, Math.min(255, v + BRIGHT_LIFT)));
+}
 function vary(rgbIn, amt) {
-  return rgbIn.map((v) => Math.max(0, Math.min(255, v + (Math.random() * 2 - 1) * amt)));
+  return rgbIn.map((v) => Math.max(0, Math.min(255, v + BRIGHT_LIFT + (Math.random() * 2 - 1) * amt)));
 }
 
 function fillNoise(ctx, base, amp = 30, spec = SIZE) {
+  const b = lift(base);
   for (let y = 0; y < spec; y++) {
     for (let x = 0; x < spec; x++) {
-      const c = vary(base, amp);
+      const c = b.map((v, i) => Math.max(0, Math.min(255, v + (Math.random() * 2 - 1) * amp)));
       ctx.fillStyle = rgb(c[0], c[1], c[2]);
       ctx.fillRect(x, y, 1, 1);
     }
@@ -54123,6 +54141,24 @@ function drawTexture(id, face) {
       ctx.fillRect(7, 7, 2, 4);
       ctx.fillStyle = "#1a1a1a";
       ctx.fillRect(7, 9, 2, 1);
+      break;
+    }
+    case B.DOOR:
+    case B.DOOR_TOP: {
+      // Plank vertical grain door.
+      fillNoise(ctx, base, 12);
+      ctx.fillStyle = "rgba(60,40,15,0.7)";
+      ctx.fillRect(0, 0, 1, SIZE);
+      ctx.fillRect(SIZE - 1, 0, 1, SIZE);
+      // Vertical plank seams
+      ctx.fillStyle = "rgba(40,25,10,0.5)";
+      ctx.fillRect(5, 0, 1, SIZE);
+      ctx.fillRect(10, 0, 1, SIZE);
+      // Handle on bottom half only
+      if (id === B.DOOR) {
+        ctx.fillStyle = "#d8b340";
+        ctx.fillRect(12, 8, 2, 2);
+      }
       break;
     }
     case B.RAW_BEEF: {
@@ -54424,8 +54460,9 @@ function generateChunk(cx, cz, noise) {
       // Layered height: gentle hills + occasional dramatic mountains.
       let hill = (noise.height(sx * 0.012, sz * 0.012, 5) - 0.5) * 2;
       const mtnNoise = noise.height(sx * 0.005 + 100, sz * 0.005 - 50, 3);
-      const mtnMask = Math.max(0, mtnNoise - 0.55) / 0.45;
-      const mtn = mtnMask * mtnMask;
+      const mtnMask = Math.max(0, mtnNoise - 0.6) / 0.4;
+      // Higher power → flatter plains with sharper dramatic peaks.
+      const mtn = mtnMask * mtnMask * mtnMask * mtnMask;
 
       // Continent mask — smooth, continuous. `oceanFactor` runs 0 (deep
       // ocean) → 1 (interior) and is squared for flatter seabeds. No hard
@@ -54582,38 +54619,69 @@ function addCross(layer, x, y, z, id, w, h) {
   }
 }
 
-// Adds a torch as two crossed quads centered in the cell, smaller than full block.
+// Adds a 3D torch: a thin stick box with a small flame cube on top. Both
+// pieces sample the torch texture (which already has a brown stick and an
+// orange flame). Real lighting comes from a PointLight pool in main.js that
+// tracks the nearest torches.
+function addBox(layer, x0, y0, z0, x1, y1, z1, id, faceIdx = 2) {
+  const [u0, v0, u1, v1] = atlasUV(id, faceIdx);
+  const faces = [
+    { dir: [ 1, 0, 0], corners: [[x1,y0,z1],[x1,y1,z1],[x1,y1,z0],[x1,y0,z0]] },
+    { dir: [-1, 0, 0], corners: [[x0,y0,z0],[x0,y1,z0],[x0,y1,z1],[x0,y0,z1]] },
+    { dir: [ 0, 1, 0], corners: [[x0,y1,z1],[x1,y1,z1],[x1,y1,z0],[x0,y1,z0]] },
+    { dir: [ 0,-1, 0], corners: [[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]] },
+    { dir: [ 0, 0, 1], corners: [[x0,y0,z1],[x0,y1,z1],[x1,y1,z1],[x1,y0,z1]] },
+    { dir: [ 0, 0,-1], corners: [[x1,y0,z0],[x1,y1,z0],[x0,y1,z0],[x0,y0,z0]] },
+  ];
+  for (const f of faces) {
+    const vi = layer.positions.length / 3;
+    for (const c of f.corners) layer.positions.push(c[0], c[1], c[2]);
+    for (let i = 0; i < 4; i++) layer.normals.push(f.dir[0], f.dir[1], f.dir[2]);
+    layer.uvs.push(u0, v1, u0, v0, u1, v0, u1, v1);
+    layer.indices.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+  }
+}
 function addTorch(layer, x, y, z, id) {
-  const cx = x + 0.5, cz = z + 0.5;
-  const w = 0.18;           // half-width at top/bottom
-  const baseY = y, topY = y + 0.65;
-  const [u0, v0, u1, v1] = atlasUV(id, 2);  // use "top" face UVs
+  // Stick: thin vertical box from y=0 to y=0.55, centered in the cell.
+  addBox(layer, x + 0.43, y + 0.00, z + 0.43, x + 0.57, y + 0.55, z + 0.57, id);
+  // Flame head: slightly wider cube on top so it reads as fire from any angle.
+  addBox(layer, x + 0.38, y + 0.55, z + 0.38, x + 0.62, y + 0.72, z + 0.62, id);
+}
 
-  // Plane 1: diagonal +x+z to -x-z
-  let vIdx = layer.positions.length / 3;
-  const pts1 = [
-    [cx - w, baseY, cz - w],
-    [cx - w, topY,  cz - w],
-    [cx + w, topY,  cz + w],
-    [cx + w, baseY, cz + w],
-  ];
-  for (const p of pts1) layer.positions.push(p[0], p[1], p[2]);
-  for (let i = 0; i < 4; i++) layer.normals.push(0, 0, 1);
-  layer.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
-  layer.indices.push(vIdx, vIdx + 1, vIdx + 2, vIdx, vIdx + 2, vIdx + 3);
-
-  // Plane 2: diagonal -x+z to +x-z
-  vIdx = layer.positions.length / 3;
-  const pts2 = [
-    [cx + w, baseY, cz - w],
-    [cx + w, topY,  cz - w],
-    [cx - w, topY,  cz + w],
-    [cx - w, baseY, cz + w],
-  ];
-  for (const p of pts2) layer.positions.push(p[0], p[1], p[2]);
-  for (let i = 0; i < 4; i++) layer.normals.push(0, 0, 1);
-  layer.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
-  layer.indices.push(vIdx, vIdx + 1, vIdx + 2, vIdx, vIdx + 2, vIdx + 3);
+// Door panel — thin slab (0.15 thick) that spans the cell. Two quads (front +
+// back). Orientation depends on whether the door is open: closed = panel in
+// the Z=0 plane (faces ±Z); open = swung to the X=0 plane (faces ±X).
+function addDoor(layer, x, y, z, id, isOpen) {
+  const [u0, v0, u1, v1] = atlasUV(id, 2);
+  let minA, maxA, minB, maxB;
+  if (isOpen) {
+    // Panel runs along Z; occupies x≈0..0.15
+    minA = [x + 0.0,  y, z + 0.0];
+    maxA = [x + 0.15, y + 1, z + 1.0];
+  } else {
+    // Panel runs along X; occupies z≈0..0.15
+    minA = [x + 0.0,  y, z + 0.0];
+    maxA = [x + 1.0,  y + 1, z + 0.15];
+  }
+  const quad = (a, b, c, d, nx, ny, nz) => {
+    const vi = layer.positions.length / 3;
+    for (const p of [a, b, c, d]) layer.positions.push(p[0], p[1], p[2]);
+    for (let i = 0; i < 4; i++) layer.normals.push(nx, ny, nz);
+    layer.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
+    layer.indices.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+  };
+  // Front + back face of the thin slab.
+  if (isOpen) {
+    quad([minA[0], minA[1], minA[2]], [minA[0], maxA[1], minA[2]],
+         [minA[0], maxA[1], maxA[2]], [minA[0], minA[1], maxA[2]], -1, 0, 0);
+    quad([maxA[0], minA[1], maxA[2]], [maxA[0], maxA[1], maxA[2]],
+         [maxA[0], maxA[1], minA[2]], [maxA[0], minA[1], minA[2]], 1, 0, 0);
+  } else {
+    quad([minA[0], minA[1], minA[2]], [maxA[0], minA[1], minA[2]],
+         [maxA[0], maxA[1], minA[2]], [minA[0], maxA[1], minA[2]], 0, 0, -1);
+    quad([minA[0], maxA[1], maxA[2]], [maxA[0], maxA[1], maxA[2]],
+         [maxA[0], minA[1], maxA[2]], [minA[0], minA[1], maxA[2]], 0, 0, 1);
+  }
 }
 
 function buildChunkMesh(chunk, world) {
@@ -54638,6 +54706,13 @@ function buildChunkMesh(chunk, world) {
         // Decor: torches and seagrass render as crossed quads.
         if (id === B.TORCH) {
           addTorch(transparent, x, y, z, id);
+          continue;
+        }
+        if (id === B.DOOR || id === B.DOOR_TOP) {
+          // Open/closed state lives on the bottom block (same x,z; y-1 for top).
+          const baseY = id === B.DOOR ? y : y - 1;
+          const isOpen = world.isDoorOpen(baseX + x, baseY, baseZ + z);
+          addDoor(transparent, x, y, z, id, isOpen);
           continue;
         }
         if (id === B.SEAGRASS) {
@@ -54734,6 +54809,8 @@ class World {
     this.treesHealth = new Map(); // `${wx},${wy},${wz}` -> hp
     this.modified = new Map();   // `${wx},${wy},${wz}` -> blockId (player edits)
     this.chests = new Map();     // `${wx},${wy},${wz}` -> Array(27) of slot ids or null
+    this.doors = new Set();      // `${bx},${by},${bz}` (bottom block) of open doors
+    this.torches = new Set();    // `${wx},${wy},${wz}` of placed torches
   }
   static modKey(x, y, z) { return `${x},${y},${z}`; }
   // 27-slot chest inventory at a position, created lazily.
@@ -54744,6 +54821,13 @@ class World {
     return c;
   }
   removeChest(x, y, z) { this.chests.delete(World.modKey(x, y, z)); }
+  // Door open/closed state. `bx,by,bz` is the BOTTOM block of the door.
+  isDoorOpen(bx, by, bz) { return this.doors.has(`${bx},${by},${bz}`); }
+  toggleDoor(bx, by, bz) {
+    const k = `${bx},${by},${bz}`;
+    if (this.doors.has(k)) this.doors.delete(k);
+    else this.doors.add(k);
+  }
   key(cx, cz) { return `${cx},${cz}`; }
 
   getChunk(cx, cz) { return this.chunks.get(this.key(cx, cz)); }
@@ -54784,8 +54868,13 @@ class World {
     const cx = Math.floor(wx / CHUNK_SIZE), cz = Math.floor(wz / CHUNK_SIZE);
     const c = this.ensureChunk(cx, cz);
     const lx = wx - cx * CHUNK_SIZE, lz = wz - cz * CHUNK_SIZE;
+    const k = World.modKey(wx, wy, wz);
+    // Keep the torch index in sync with player edits so the light pool can
+    // find them quickly without scanning the whole modified map each frame.
+    if (v === B.TORCH) this.torches.add(k);
+    else if (this.torches.has(k)) this.torches.delete(k);
     c.set(lx, wy, lz, v);
-    this.modified.set(World.modKey(wx, wy, wz), v);
+    this.modified.set(k, v);
     // mark neighbours dirty if on border
     if (lx === 0) { const n = this.getChunk(cx - 1, cz); if (n) n.dirty = true; }
     if (lx === CHUNK_SIZE - 1) { const n = this.getChunk(cx + 1, cz); if (n) n.dirty = true; }
@@ -54877,7 +54966,7 @@ function createRenderer(canvas) {
   }
   window.addEventListener("resize", onResize);
 
-  return { renderer, scene, camera, sun };
+  return { renderer, scene, camera, sun, ambient, hemi };
 }
 
   window.createRenderer = typeof createRenderer !== 'undefined' ? createRenderer : undefined;
@@ -54959,6 +55048,93 @@ class Input {
   window.Input = typeof Input !== 'undefined' ? Input : undefined;
 })();
 
+// === js/engine/daynight.js ===
+(function () {
+// Smooth day/night cycle. Owns a `time` value in [0,1) that advances each
+// frame. Drives sun direction, sun intensity, ambient/hemisphere intensity,
+// scene background colour, and fog colour.
+//
+// time: 0=midnight · 0.25=sunrise · 0.5=noon · 0.75=sunset
+const DAY_LENGTH = CONFIG.world.dayLengthSeconds; // seconds for a full cycle
+
+// Sky/fog colour stops — [time, r, g, b]. Lerped between adjacent stops.
+const SKY_STOPS = [
+  [0.00, 0.04, 0.05, 0.10],   // midnight — deep blue-black
+  [0.22, 0.10, 0.12, 0.22],   // pre-dawn
+  [0.27, 0.85, 0.55, 0.40],   // sunrise — orange
+  [0.35, 0.55, 0.75, 0.95],   // morning blue
+  [0.50, 0.53, 0.81, 0.92],   // noon — bright sky (#87ceeb)
+  [0.65, 0.55, 0.75, 0.95],   // afternoon blue
+  [0.73, 0.95, 0.50, 0.30],   // sunset — orange
+  [0.80, 0.25, 0.18, 0.30],   // dusk
+  [1.00, 0.04, 0.05, 0.10],   // back to midnight
+];
+
+class DayNight {
+  constructor(scene, camera, sun, ambient, hemi) {
+    this.scene = scene;
+    this.camera = camera;
+    this.sun = sun;
+    this.ambient = ambient;
+    this.hemi = hemi;
+    this.time = 0.30; // start mid-morning so the player sees daylight immediately
+  }
+  // Sun elevation in [-1,1]: -1 = midnight (sun directly below), 0 = horizon
+  // (sunrise/sunset), +1 = noon (overhead).
+  elevation() { return -Math.cos(this.time * Math.PI * 2); }
+  // Daylight mix factor [0,1]: 0 deep night, ~0.35 twilight, 1 full day.
+  dayFactor() { return Math.max(0, Math.min(1, this.elevation() * 0.7 + 0.35)); }
+  update(dt) {
+    this.time = (this.time + dt / DAY_LENGTH) % 1;
+
+    // Sun angle: ang=0 at sunrise (time=0.25), π/2 at noon, π at sunset.
+    // Sun travels east → overhead → west. Below horizon at night.
+    const ang = (this.time - 0.25) * Math.PI * 2;
+    const sx = Math.cos(ang);
+    const sy = Math.sin(ang);
+    const sz = 0.35; // slight tilt so shadows aren't perfectly axis-aligned
+    this.sun.position.set(sx * 80, sy * 100, sz * 80);
+
+    // Intensities — dim everything at night, but never fully dark so the
+    // player can still see. Sun rises/falls with elevation.
+    const day = this.dayFactor();
+    this.sun.intensity = 0.05 + day * 1.10;
+    this.ambient.intensity = 0.18 + day * 0.40;
+    this.hemi.intensity = 0.12 + day * 0.30;
+
+    // Sun colour shifts warm at sunrise/sunset, white at noon, cool at night.
+    const warm = Math.max(0, 1 - Math.abs(this.elevation()) * 1.5);
+    const sunR = 1.00;
+    const sunG = 0.96 - warm * 0.20;
+    const sunB = 0.85 - warm * 0.45;
+    this.sun.color.setRGB(sunR, sunG, sunB);
+
+    // Sky + fog colour from stop table.
+    const [r, g, b] = sampleStops(SKY_STOPS, this.time);
+    const col = new THREE.Color(r, g, b);
+    this.scene.background = col;
+    if (this.scene.fog) this.scene.fog.color = col;
+  }
+}
+
+function sampleStops(stops, t) {
+  for (let i = 0; i < stops.length - 1; i++) {
+    const a = stops[i], b = stops[i + 1];
+    if (t >= a[0] && t <= b[0]) {
+      const f = (t - a[0]) / (b[0] - a[0]);
+      return [
+        a[1] + (b[1] - a[1]) * f,
+        a[2] + (b[2] - a[2]) * f,
+        a[3] + (b[3] - a[3]) * f,
+      ];
+    }
+  }
+  return [stops[0][1], stops[0][2], stops[0][3]];
+}
+
+  window.DayNight = typeof DayNight !== 'undefined' ? DayNight : undefined;
+})();
+
 // === js/entities/player.js ===
 (function () {
 // First-person player: AABB voxel collision, walking, jumping, gravity, fly.
@@ -55024,8 +55200,13 @@ class Player {
     const z0 = Math.floor(wz - this.half), z1 = Math.floor(wz + this.half);
     for (let x = x0; x <= x1; x++)
       for (let y = y0; y <= y1; y++)
-        for (let z = z0; z <= z1; z++)
-          if (isSolid(this.world.getBlock(x, y, z))) return true;
+        for (let z = z0; z <= z1; z++) {
+          const id = this.world.getBlock(x, y, z);
+          if (!isSolid(id)) continue;
+          // Open doors are visually present but passable.
+          if (id === B.DOOR && this.world.isDoorOpen(x, y, z)) continue;
+          return true;
+        }
     return false;
   }
 
@@ -55340,6 +55521,7 @@ const RECIPES = [
   { out: [B.TORCH, 4],     in: [{ id: B.WOOD, count: 1 }],            name: "Torch ×4" },
   { out: [B.ARCH, 1],      in: [{ id: B.BEAM, count: 2 }, { id: B.PLANKS, count: 1 }], name: "Arch" },
   { out: [B.CHEST, 1],     in: [{ id: B.PLANKS, count: 4 }], name: "Chest (27 storage slots)" },
+  { out: [B.DOOR, 1],      in: [{ id: B.PLANKS, count: 3 }], name: "Door (right-click to open)" },
   { out: [B.IRON_BLOCK, 1], in: [{ id: B.IRON_ORE, count: 9 }],       name: "Iron Block" },
   { out: [B.GOLD_BLOCK, 1], in: [{ id: B.GOLD_ORE, count: 9 }],       name: "Gold Block" },
   { out: [B.DIAMOND_BLOCK, 1], in: [{ id: B.DIAMOND_ORE, count: 9 }], name: "Diamond Block" },
@@ -56144,7 +56326,47 @@ async function main() {
     const canvas = document.createElement("canvas");
     root.appendChild(canvas);
 
-  const { renderer, scene, camera } = createRenderer(canvas);
+  const { renderer, scene, camera, sun, ambient, hemi } = createRenderer(canvas);
+  const dayNight = new DayNight(scene, camera, sun, ambient, hemi);
+
+  // Torch light pool. Each torch in the world is eligible to drive one of
+  // these PointLights; we reassign them to the nearest N torches each tick.
+  // Capped because Three.js re-renders every lit face per light — too many
+  // lights tanks FPS.
+  const TORCH_LIGHT_COUNT = 6;
+  const TORCH_LIGHT_RANGE = 12;
+  const TORCH_LIGHT_INTENSITY = 1.6;
+  const torchLights = [];
+  for (let i = 0; i < TORCH_LIGHT_COUNT; i++) {
+    const l = new THREE.PointLight("#ffb060", 0, TORCH_LIGHT_RANGE, 2.0);
+    scene.add(l);
+    torchLights.push(l);
+  }
+  let torchLightAcc = 0;
+  function updateTorchLights(playerPos) {
+    const candidates = [];
+    for (const key of world.torches) {
+      const parts = key.split(",");
+      const tx = +parts[0], ty = +parts[1], tz = +parts[2];
+      const dx = tx + 0.5 - playerPos.x;
+      const dy = ty + 0.4 - playerPos.y;
+      const dz = tz + 0.5 - playerPos.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 > TORCH_LIGHT_RANGE * TORCH_LIGHT_RANGE * 1.5) continue;
+      candidates.push({ x: tx + 0.5, y: ty + 0.45, z: tz + 0.5, d2 });
+    }
+    candidates.sort((a, b) => a.d2 - b.d2);
+    for (let i = 0; i < TORCH_LIGHT_COUNT; i++) {
+      const tl = torchLights[i];
+      const c = candidates[i];
+      if (c) {
+        tl.position.set(c.x, c.y, c.z);
+        tl.intensity = TORCH_LIGHT_INTENSITY;
+      } else {
+        tl.intensity = 0;
+      }
+    }
+  }
   // World/player/etc. are created when a slot is chosen — seed depends on slot.
   let world, player, input, mining, trees, mobs, inv, hud;
   let hunger = 20;
@@ -56193,6 +56415,7 @@ async function main() {
       hunger,
       modified: Object.fromEntries(world.modified),
       chests: Object.fromEntries(world.chests),
+      doors: Array.from(world.doors),
     };
   }
 
@@ -56229,33 +56452,70 @@ async function main() {
         world.removeChest(x, y, z);
       }
     }
+    // Breaking either half of a door drops one door item and clears the other.
+    if (id === B.DOOR) {
+      if (world.getBlock(x, y + 1, z) === B.DOOR_TOP) world.setBlock(x, y + 1, z, B.AIR);
+      world.doors.delete(`${x},${y},${z}`);
+    } else if (id === B.DOOR_TOP) {
+      if (world.getBlock(x, y - 1, z) === B.DOOR) {
+        world.setBlock(x, y - 1, z, B.AIR);
+        world.doors.delete(`${x},${y - 1},${z}`);
+      }
+      // The top half isn't a placeable item — drop a regular door instead.
+      if (drop) { inv.remove(B.DOOR_TOP, 1); inv.add(B.DOOR, 1); }
+    }
     hud.refresh();
     return true;
   }
 
   function placeBlock() {
+    const t = mining.acquire(player);
+    if (t) {
+      const hitId = world.getBlock(t.x, t.y, t.z);
+      const hitDef = BLOCKS[hitId];
+      // Right-clicking an interactive block always uses it, even with a tool
+      // or food selected — otherwise you couldn't open chests while holding
+      // a pickaxe.
+      if (hitDef?.interactive) {
+        if (hitId === B.CHEST) { openChest(t.x, t.y, t.z); return; }
+        if (hitId === B.DOOR)  { toggleDoorAt(t.x, t.y, t.z); return; }
+      }
+    }
     const sel = inv.selected();
     if (sel === null) return;
     const def = BLOCKS[sel];
     if (def?.food) { eat(sel); return; }
     if (def?.item) return; // don't place tools/items in the world
-    const t = mining.acquire(player);
     if (!t) return;
-    // Right-clicking an interactive block (chest) opens it instead of placing.
-    if (BLOCKS[world.getBlock(t.x, t.y, t.z)]?.interactive) {
-      openChest(t.x, t.y, t.z);
-      return;
-    }
     const px = t.x + t.face[0], py = t.y + t.face[1], pz = t.z + t.face[2];
     if (py < 0 || py >= CONFIG.world.chunkHeight) return;
     const minX = player.pos.x - player.half, maxX = player.pos.x + player.half;
     const minY = player.pos.y, maxY = player.pos.y + player.height;
     const minZ = player.pos.z - player.half, maxZ = player.pos.z + player.half;
-    if (px + 1 > minX && px < maxX && py + 1 > minY && py < maxY && pz + 1 > minZ && pz < maxZ) return;
+    // Doors are 2 cells tall — extend the AABB overlap check upward.
+    const cellTop = (sel === B.DOOR) ? py + 2 : py + 1;
+    if (px + 1 > minX && px < maxX && cellTop > minY && py < maxY && pz + 1 > minZ && pz < maxZ) return;
     if (world.getBlock(px, py, pz) !== B.AIR) return;
+    // Doors occupy 2 vertical cells — bail if the head cell is blocked.
+    if (sel === B.DOOR) {
+      if (py + 1 >= CONFIG.world.chunkHeight) return;
+      if (world.getBlock(px, py + 1, pz) !== B.AIR) return;
+    }
     world.setBlock(px, py, pz, sel);
+    if (sel === B.DOOR) world.setBlock(px, py + 1, pz, B.DOOR_TOP);
     inv.remove(sel, 1);
     hud.refresh();
+  }
+  function toggleDoorAt(x, y, z) {
+    // `y` may be either half of the door — find the bottom.
+    let by = y;
+    if (world.getBlock(x, y, z) === B.DOOR_TOP) by = y - 1;
+    if (world.getBlock(x, by, z) !== B.DOOR) return;
+    world.toggleDoor(x, by, z);
+    // Re-mesh the chunk(s) that contain the door so the panel swings.
+    const cx = Math.floor(x / CONFIG.world.chunkSize), cz = Math.floor(z / CONFIG.world.chunkSize);
+    const c = world.getChunk(cx, cz);
+    if (c) c.dirty = true;
   }
 
   function eat(id) {
@@ -56310,6 +56570,48 @@ async function main() {
   let invOpen = false;
   let invCarried = null; // {id} when dragging a stack between slots
   let pendingNewSlot = null;
+
+  // Floating ghost item that follows the cursor during drag-and-drop.
+  const carriedGhost = $("#carried-ghost");
+  function getCarried() {
+    return invCarried || chestCarried;
+  }
+  function setCarried(c) {
+    if (chestOpen) chestCarried = c;
+    else invCarried = c;
+  }
+  function refreshGhost() {
+    const c = getCarried();
+    if (!c) { carriedGhost.style.display = "none"; return; }
+    const tex = getTexture(c.id, "side");
+    carriedGhost.style.backgroundImage = `url(${tex.image.toDataURL?.() || tex.image.src})`;
+    carriedGhost.style.display = "block";
+    carriedGhost.textContent = "";
+  }
+  document.addEventListener("mousemove", (e) => {
+    if (carriedGhost.style.display === "block") {
+      carriedGhost.style.transform = `translate(${e.clientX + 6}px, ${e.clientY + 6}px)`;
+    }
+  });
+  let dragSource = null; // slot element where current drag started
+  function bindSlotEvents(slot, pickFn, dropFn) {
+    slot.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      pickFn();
+      dragSource = slot;
+      refreshGhost();
+    });
+    slot.addEventListener("mouseup", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      // Drop on the slot under the cursor. If that's the same slot we picked
+      // up from, dropFn just puts the item back — a no-op drag.
+      dropFn();
+      dragSource = null;
+      refreshGhost();
+    });
+  }
 
   // Pre-warm the texture atlas up front so it's ready when a world loads.
   for (const idStr of Object.keys(BLOCKS)) {
@@ -56464,6 +56766,14 @@ async function main() {
     if (saved && saved.chests) {
       for (const [k, v] of Object.entries(saved.chests)) world.chests.set(k, v);
     }
+    if (saved && saved.doors) {
+      for (const k of saved.doors) world.doors.add(k);
+    }
+    // Rebuild the torch index from persisted block edits so the light pool
+    // works immediately on load.
+    for (const [k, v] of world.modified) {
+      if (v === B.TORCH) world.torches.add(k);
+    }
 
     // Pre-generate spawn chunks so player has ground.
     for (let dx = -1; dx <= 1; dx++)
@@ -56605,7 +56915,7 @@ async function main() {
       s.className = "inv-slot hotbar";
       s.dataset.kind = "hotbar";
       s.dataset.idx = i;
-      s.addEventListener("click", () => onInvSlotClick("hotbar", i));
+      bindSlotEvents(s, () => onInvSlotPick("hotbar", i), () => onInvSlotDrop("hotbar", i));
       invHotbar.append(s);
     }
     for (let i = 0; i < 27; i++) {
@@ -56613,7 +56923,7 @@ async function main() {
       s.className = "inv-slot";
       s.dataset.kind = "main";
       s.dataset.idx = i;
-      s.addEventListener("click", () => onInvSlotClick("main", i));
+      bindSlotEvents(s, () => onInvSlotPick("main", i), () => onInvSlotDrop("main", i));
       invGrid.append(s);
     }
   }
@@ -56644,6 +56954,28 @@ async function main() {
   function onInvSlotClick(kind, idx) {
     const arr = kind === "hotbar" ? inv.hotbar : inv.main;
     invCarried = inv.swapWith(arr, idx, invCarried);
+    hud.refresh();
+    refreshInvPanel();
+  }
+  // mousedown: pick up the slot's contents (only if nothing already carried).
+  function onInvSlotPick(kind, idx) {
+    if (invCarried) return;
+    const arr = kind === "hotbar" ? inv.hotbar : inv.main;
+    const cur = arr[idx];
+    if (cur == null) return;
+    invCarried = { id: cur };
+    arr[idx] = null;
+    hud.refresh();
+    refreshInvPanel();
+  }
+  // mouseup: drop the carried item into the slot (swap if occupied).
+  function onInvSlotDrop(kind, idx) {
+    if (!invCarried) return;
+    const arr = kind === "hotbar" ? inv.hotbar : inv.main;
+    const cur = arr[idx];
+    if (cur == null) { arr[idx] = invCarried.id; invCarried = null; }
+    else if (cur === invCarried.id) { invCarried = null; }
+    else { arr[idx] = invCarried.id; invCarried = { id: cur }; }
     hud.refresh();
     refreshInvPanel();
   }
@@ -56678,7 +57010,7 @@ async function main() {
       s.className = "inv-slot";
       s.dataset.kind = "chest";
       s.dataset.idx = i;
-      s.addEventListener("click", () => onChestSlotClick("chest", i));
+      bindSlotEvents(s, () => onChestSlotPick("chest", i), () => onChestSlotDrop("chest", i));
       chestGrid.append(s);
     }
     for (let i = 0; i < 27; i++) {
@@ -56686,7 +57018,7 @@ async function main() {
       s.className = "inv-slot";
       s.dataset.kind = "main";
       s.dataset.idx = i;
-      s.addEventListener("click", () => onChestSlotClick("main", i));
+      bindSlotEvents(s, () => onChestSlotPick("main", i), () => onChestSlotDrop("main", i));
       chestPlayerGrid.append(s);
     }
     for (let i = 0; i < 9; i++) {
@@ -56694,7 +57026,7 @@ async function main() {
       s.className = "inv-slot hotbar";
       s.dataset.kind = "hotbar";
       s.dataset.idx = i;
-      s.addEventListener("click", () => onChestSlotClick("hotbar", i));
+      bindSlotEvents(s, () => onChestSlotPick("hotbar", i), () => onChestSlotDrop("hotbar", i));
       chestPlayerHotbar.append(s);
     }
   }
@@ -56741,6 +57073,33 @@ async function main() {
       const arr = kind === "hotbar" ? inv.hotbar : inv.main;
       invCarried = inv.swapWith(arr, idx, invCarried);
     }
+    hud.refresh();
+    refreshChestPanel();
+  }
+  // Resolve a chest-panel slot to its underlying array.
+  function chestArrFor(kind) {
+    if (kind === "chest") return chestPos ? world.getChest(chestPos.x, chestPos.y, chestPos.z) : null;
+    return kind === "hotbar" ? inv.hotbar : inv.main;
+  }
+  function onChestSlotPick(kind, idx) {
+    if (chestCarried) return;
+    const arr = chestArrFor(kind);
+    if (!arr) return;
+    const cur = arr[idx];
+    if (cur == null) return;
+    chestCarried = { id: cur };
+    arr[idx] = null;
+    hud.refresh();
+    refreshChestPanel();
+  }
+  function onChestSlotDrop(kind, idx) {
+    if (!chestCarried) return;
+    const arr = chestArrFor(kind);
+    if (!arr) return;
+    const cur = arr[idx];
+    if (cur == null) { arr[idx] = chestCarried.id; chestCarried = null; }
+    else if (cur === chestCarried.id) { chestCarried = null; }
+    else { arr[idx] = chestCarried.id; chestCarried = { id: cur }; }
     hud.refresh();
     refreshChestPanel();
   }
@@ -56861,6 +57220,16 @@ async function main() {
     attackCooldown = Math.max(0, attackCooldown - dt);
 
     player.update(dt, input);
+
+    dayNight.update(dt);
+
+    // Reassign torch lights to the nearest torches a few times per second —
+    // doing it every frame is wasteful since torches don't move.
+    torchLightAcc += dt;
+    if (torchLightAcc >= 0.1) {
+      torchLightAcc = 0;
+      updateTorchLights(player.pos);
+    }
 
     if (input.mouseJust[0]) attack();
     const miningAim = !mobs.raycast(player.eyePos(), player.lookDir(), CONFIG.mining.range + 1);
