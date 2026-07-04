@@ -12,6 +12,7 @@ export const B = {
   SEAGRASS: 34, RAW_FISH: 35, COOKED_FISH: 36,
   CHEST: 37,
   DOOR: 38, DOOR_TOP: 39,
+  TRADER: 40,
 };
 
 export const BLOCKS = {
@@ -38,6 +39,7 @@ export const BLOCKS = {
   [B.CHEST]: { name: "chest", solid: true, hardness: 1.0, color: "#8a5a2a", interactive: true },
   [B.DOOR]: { name: "door", solid: true, hardness: 1.0, color: "#a07a3a", interactive: true, transparent: true, door: true },
   [B.DOOR_TOP]: { name: "door_top", solid: false, hardness: 1.0, color: "#a07a3a", transparent: true, decor: true, door: true },
+  [B.TRADER]: { name: "trader", solid: true, hardness: 2.0, color: "#5a3a1a", interactive: true, trader: true },
   [B.COBBLE]: { name: "cobble", solid: true, hardness: 1.8, color: "#7c7c80", toolTier: 1 },
   [B.WALL_STONE]: { name: "wall_stone", solid: true, hardness: 3.0, color: "#6e6e72", toolTier: 1 },
   [B.BRICK]: { name: "brick", solid: true, hardness: 2.5, color: "#a23a2a", toolTier: 1 },

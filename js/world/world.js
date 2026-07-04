@@ -8,6 +8,38 @@ import { Chunk, CHUNK_SIZE } from "./chunk.js";
 import { buildChunkMesh } from "./mesher.js";
 import { B } from "./blocks.js";
 
+// Trade pool: each entry is {id, count, cost}. Traders roll a small random
+// selection from this list. Costs are in gold-coin units (player pays with
+// GOLD_BLOCK items, which are 9 ore → fair-priced for early-game access).
+const TRADE_POOL = [
+  { id: B.RAW_BEEF,     count: 2, cost: 1 },
+  { id: B.RAW_FISH,     count: 3, cost: 1 },
+  { id: B.COOKED_BEEF,  count: 1, cost: 2 },
+  { id: B.COOKED_FISH,  count: 2, cost: 2 },
+  { id: B.TORCH,        count: 8, cost: 1 },
+  { id: B.PLANKS,       count: 16, cost: 1 },
+  { id: B.WALL_STONE,   count: 8, cost: 2 },
+  { id: B.BRICK,        count: 8, cost: 2 },
+  { id: B.GLASS,        count: 6, cost: 2 },
+  { id: B.PICKAXE_IRON, count: 1, cost: 3 },
+  { id: B.PICKAXE_DIAMOND, count: 1, cost: 6 },
+  { id: B.CHEST,        count: 1, cost: 2 },
+  { id: B.DOOR,         count: 2, cost: 1 },
+  { id: B.IRON_BLOCK,   count: 1, cost: 4 },
+  { id: B.GOLD_BLOCK,   count: 1, cost: 5 },
+];
+function makeTraderOffers() {
+  // Pick 5 distinct items from the pool, copying so callers can mutate counts.
+  const pool = TRADE_POOL.slice();
+  const offers = [];
+  for (let i = 0; i < 5 && pool.length; i++) {
+    const idx = (Math.random() * pool.length) | 0;
+    const o = pool.splice(idx, 1)[0];
+    offers.push({ id: o.id, count: o.count, cost: o.cost });
+  }
+  return offers;
+}
+
 export class World {
   constructor(scene, seed = (Math.random() * 1e9) | 0) {
     this.scene = scene;
@@ -21,6 +53,7 @@ export class World {
     this.chests = new Map();     // `${wx},${wy},${wz}` -> Array(27) of slot ids or null
     this.doors = new Set();      // `${bx},${by},${bz}` (bottom block) of open doors
     this.torches = new Set();    // `${wx},${wy},${wz}` of placed torches
+    this.traders = new Map();    // `${wx},${wy},${wz}` -> [{id, count, cost}, ...]
   }
   static modKey(x, y, z) { return `${x},${y},${z}`; }
   // 27-slot chest inventory at a position, created lazily.
@@ -31,6 +64,16 @@ export class World {
     return c;
   }
   removeChest(x, y, z) { this.chests.delete(World.modKey(x, y, z)); }
+  // Per-position trader inventory. A trader is a block with a small set of
+  // trade offers generated when the structure is built. Returns the offers
+  // array, creating it lazily so legacy saves without trader data work too.
+  getTrader(x, y, z) {
+    const k = World.modKey(x, y, z);
+    let t = this.traders.get(k);
+    if (!t) { t = makeTraderOffers(); this.traders.set(k, t); }
+    return t;
+  }
+  removeTrader(x, y, z) { this.traders.delete(World.modKey(x, y, z)); }
   // Door open/closed state. `bx,by,bz` is the BOTTOM block of the door.
   isDoorOpen(bx, by, bz) { return this.doors.has(`${bx},${by},${bz}`); }
   toggleDoor(bx, by, bz) {

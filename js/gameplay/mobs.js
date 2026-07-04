@@ -1,5 +1,6 @@
 // Mob system: spawns/despawns cows on land + fish in water and updates them.
 import * as THREE from "three";
+import { CONFIG } from "../config.js";
 import { Cow } from "../entities/cow.js";
 import { Fish } from "../entities/fish.js";
 import { isSolid, isLiquid, B } from "../world/blocks.js";
@@ -10,6 +11,7 @@ export class MobSystem {
     this.scene = scene;
     this.mobs = [];
     this.targetCount = 8;
+    this.fishTargetCount = 6;    // separate cap so cows can't starve fish
     this.spawnTimer = 0;
     this._aiAcc = 0;             // throttle AI updates for perf
   }
@@ -31,36 +33,40 @@ export class MobSystem {
     return null;
   }
   _findWaterSpawn(playerPos) {
-    for (let attempt = 0; attempt < 10; attempt++) {
+    // The old check required water AT y+1 (the cell above the fish) AND
+    // y-1 to be non-air. At the surface (y = seaLevel), y+1 is air, so the
+    // check failed at every surface cell — fish essentially never spawned.
+    // Now we accept any submerged cell with solid ground below, scanning
+    // a wider ring with more attempts.
+    const sea = CONFIG.world.seaLevel;
+    for (let attempt = 0; attempt < 14; attempt++) {
       const ang = Math.random() * Math.PI * 2;
-      const r = 6 + Math.random() * 18;
+      const r = 4 + Math.random() * 22;
       const x = Math.floor(playerPos.x + Math.cos(ang) * r);
       const z = Math.floor(playerPos.z + Math.sin(ang) * r);
-      // Scan downward from sea level for a water column with room.
-      for (let y = 22; y > 2; y--) {
-        if (isLiquid(this.world.getBlock(x, y, z)) &&
-            this.world.getBlock(x, y + 1, z) === B.WATER &&
-            this.world.getBlock(x, y - 1, z) !== B.AIR) {
+      for (let y = sea; y > 1; y--) {
+        const here = this.world.getBlock(x, y, z);
+        const below = this.world.getBlock(x, y - 1, z);
+        if (here === B.WATER && below !== B.AIR && below !== B.WATER) {
           return new THREE.Vector3(x + 0.5, y, z + 0.5);
         }
       }
     }
     return null;
   }
+  _fishCount() { return this.mobs.reduce((n, m) => n + (m.isFish ? 1 : 0), 0); }
+  _cowCount() { return this.mobs.reduce((n, m) => n + (m.isFish ? 0 : 1), 0); }
   update(dt, playerPos) {
     this.spawnTimer -= dt;
-    if (this.spawnTimer <= 0 && this.mobs.length < this.targetCount) {
-      this.spawnTimer = 2 + Math.random() * 3;
-      // Try both spawn paths; bias by whether player is near water.
-      const wantsFish = Math.random() < 0.4;
-      if (wantsFish) {
+    if (this.spawnTimer <= 0) {
+      this.spawnTimer = 1.5 + Math.random() * 2.5;
+      // Spawn fish and cows independently up to their own caps so a saturated
+      // cow population doesn't block fish from ever appearing.
+      if (this._fishCount() < this.fishTargetCount) {
         const s = this._findWaterSpawn(playerPos);
-        if (s) this.mobs.push(new Fish(s, this.scene, this.world));
-        else {
-          const s2 = this._findSpawn(playerPos);
-          if (s2) this.mobs.push(new Cow(s2, this.scene, this.world));
-        }
-      } else {
+        if (s) { this.mobs.push(new Fish(s, this.scene, this.world)); return; }
+      }
+      if (this._cowCount() < this.targetCount) {
         const s = this._findSpawn(playerPos);
         if (s) this.mobs.push(new Cow(s, this.scene, this.world));
       }
@@ -99,4 +105,3 @@ export class MobSystem {
     return best;
   }
 }
-

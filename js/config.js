@@ -25,10 +25,13 @@ export const CONFIG = {
     baseTime: 0.55,       // seconds per block hardness unit
   },
   ores: {
-    iron:    { minDepth: 4,  threshold: 0.82, color: "#caa472" },
-    gold:    { minDepth: 12, threshold: 0.90, color: "#ffd700" },
-    diamond: { minDepth: 22, threshold: 0.93, color: "#7afcff" },
-    platinum:{ minDepth: 32, threshold: 0.95, color: "#e8e8f0" },
+    // Higher frequency in worldgen → smaller, more scattered veins. Lower
+    // thresholds for the rare tiers so they appear more often despite each
+    // vein being smaller.
+    iron:    { minDepth: 4,  threshold: 0.80, color: "#caa472", freq: 0.16 },
+    gold:    { minDepth: 10, threshold: 0.84, color: "#ffd700", freq: 0.16 },
+    diamond: { minDepth: 18, threshold: 0.88, color: "#7afcff", freq: 0.18 },
+    platinum:{ minDepth: 28, threshold: 0.90, color: "#e8e8f0", freq: 0.18 },
   },
   tree: {
     minHeight: 4,

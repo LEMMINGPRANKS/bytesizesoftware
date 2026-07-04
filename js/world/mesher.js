@@ -65,12 +65,12 @@ function addCross(layer, x, y, z, id, w, h) {
   }
 }
 
-// Adds a 3D torch: a thin stick box with a small flame cube on top. Both
-// pieces sample the torch texture (which already has a brown stick and an
-// orange flame). Real lighting comes from a PointLight pool in main.js that
-// tracks the nearest torches.
-function addBox(layer, x0, y0, z0, x1, y1, z1, id, faceIdx = 2) {
-  const [u0, v0, u1, v1] = atlasUV(id, faceIdx);
+// Adds a 3D torch: a thin stick box with a small flame cube on top. The
+// stick samples only the brown-stick column of the torch tile, and the
+// flame samples only the orange-flame top — otherwise every face of every
+// box shows a full torch sprite and one placed torch looks like a cluster.
+// Real lighting comes from the PointLight pool in main.js.
+function addBoxUV(layer, x0, y0, z0, x1, y1, z1, u0, v0, u1, v1) {
   const faces = [
     { dir: [ 1, 0, 0], corners: [[x1,y0,z1],[x1,y1,z1],[x1,y1,z0],[x1,y0,z0]] },
     { dir: [-1, 0, 0], corners: [[x0,y0,z0],[x0,y1,z0],[x0,y1,z1],[x0,y0,z1]] },
@@ -88,10 +88,27 @@ function addBox(layer, x0, y0, z0, x1, y1, z1, id, faceIdx = 2) {
   }
 }
 function addTorch(layer, x, y, z, id) {
-  // Stick: thin vertical box from y=0 to y=0.55, centered in the cell.
-  addBox(layer, x + 0.43, y + 0.00, z + 0.43, x + 0.57, y + 0.55, z + 0.57, id);
-  // Flame head: slightly wider cube on top so it reads as fire from any angle.
-  addBox(layer, x + 0.38, y + 0.55, z + 0.38, x + 0.62, y + 0.72, z + 0.62, id);
+  // Sub-rect within the torch tile. Tile pixel coords are 0..16 with V
+  // flipped to match Three.js. Stick = central brown column (px x:7..9,
+  // y:6..16). Flame = orange head (px x:6..10, y:3..7).
+  const [tu0, tv0, tu1, tv1] = atlasUV(id, 2);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  // Stick sub-rect (centre column, lower 5/8 of tile).
+  const su0 = lerp(tu0, tu1, 7 / 16);
+  const su1 = lerp(tu0, tu1, 9 / 16);
+  // Tile V is bottom-up; the stick occupies the bottom portion (y=6..16 in
+  // top-down canvas pixels = top 10/16 of the flipped tile, so we take the
+  // bottom 10/16 of the tile).
+  const sv0 = lerp(tv0, tv1, 0);
+  const sv1 = lerp(tv0, tv1, 10 / 16);
+  addBoxUV(layer, x + 0.43, y + 0.00, z + 0.43, x + 0.57, y + 0.55, z + 0.57, su0, sv0, su1, sv1);
+  // Flame sub-rect (top-centre 4x4 px block).
+  const fu0 = lerp(tu0, tu1, 6 / 16);
+  const fu1 = lerp(tu0, tu1, 10 / 16);
+  // Flame is at top-down y:3..7 → bottom-up: 16-7=9 to 16-3=13 → mid tile.
+  const fv0 = lerp(tv0, tv1, 9 / 16);
+  const fv1 = lerp(tv0, tv1, 13 / 16);
+  addBoxUV(layer, x + 0.38, y + 0.55, z + 0.38, x + 0.62, y + 0.72, z + 0.62, fu0, fv0, fu1, fv1);
 }
 
 // Door panel — thin slab (0.15 thick) that spans the cell. Two quads (front +

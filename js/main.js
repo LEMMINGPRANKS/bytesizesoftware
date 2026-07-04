@@ -126,6 +126,7 @@ async function main() {
       modified: Object.fromEntries(world.modified),
       chests: Object.fromEntries(world.chests),
       doors: Array.from(world.doors),
+      traders: Object.fromEntries(world.traders),
     };
   }
 
@@ -174,6 +175,11 @@ async function main() {
       // The top half isn't a placeable item — drop a regular door instead.
       if (drop) { inv.remove(B.DOOR_TOP, 1); inv.add(B.DOOR, 1); }
     }
+    // Mining a trader drops the trader block only — its offer list is a
+    // service, not physical inventory, so there's nothing else to spill.
+    if (id === B.TRADER) {
+      world.removeTrader(x, y, z);
+    }
     hud.refresh();
     return true;
   }
@@ -189,6 +195,7 @@ async function main() {
       if (hitDef?.interactive) {
         if (hitId === B.CHEST) { openChest(t.x, t.y, t.z); return; }
         if (hitId === B.DOOR)  { toggleDoorAt(t.x, t.y, t.z); return; }
+        if (hitId === B.TRADER) { openTrader(t.x, t.y, t.z); return; }
       }
     }
     const sel = inv.selected();
@@ -478,6 +485,9 @@ async function main() {
     }
     if (saved && saved.doors) {
       for (const k of saved.doors) world.doors.add(k);
+    }
+    if (saved && saved.traders) {
+      for (const [k, v] of Object.entries(saved.traders)) world.traders.set(k, v);
     }
     // Rebuild the torch index from persisted block edits so the light pool
     // works immediately on load.
@@ -845,6 +855,77 @@ async function main() {
     chestPanel.classList.add("hidden");
     showResume();
   }
+
+  // ---- Trade panel (right-click trader block) ----
+  const tradePanel = $("#trade-panel");
+  const tradeList = $("#trade-list");
+  const tradeGold = $("#trade-gold");
+  let tradeOpen = false;
+  let tradePos = null;
+  function goldCount() { return inv.count(B.GOLD_ORE) + inv.count(B.GOLD_BLOCK) * 9; }
+  function spendGold(amount) {
+    // Prefer ore first (1 each), then break blocks into 9 ore as needed.
+    let remaining = amount;
+    const oreUsed = Math.min(inv.count(B.GOLD_ORE), remaining);
+    if (oreUsed > 0) { inv.remove(B.GOLD_ORE, oreUsed); remaining -= oreUsed; }
+    while (remaining > 0 && inv.count(B.GOLD_BLOCK) > 0) {
+      inv.remove(B.GOLD_BLOCK, 1);
+      inv.add(B.GOLD_ORE, 9);
+      const use = Math.min(9, remaining);
+      inv.remove(B.GOLD_ORE, use);
+      remaining -= use;
+    }
+    return remaining === 0;
+  }
+  function refreshTradePanel() {
+    if (!tradeOpen || !tradePos) return;
+    const offers = world.traders.get(World.modKey(tradePos.x, tradePos.y, tradePos.z)) || [];
+    const gold = goldCount();
+    tradeGold.textContent = `Your gold: ${gold} (ore = 1, block = 9)`;
+    tradeList.innerHTML = "";
+    offers.forEach((o, i) => {
+      const row = document.createElement("div");
+      row.className = "trade-row" + (o.count <= 0 ? " out" : "");
+      const icon = document.createElement("div");
+      icon.className = "icon";
+      const tex = getTexture(o.id, "side");
+      icon.style.backgroundImage = `url(${tex.image.toDataURL?.() || tex.image.src})`;
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = `${BLOCKS[o.id]?.name || "?"} ×${o.count}`;
+      const cost = document.createElement("div");
+      cost.className = "cost";
+      cost.textContent = `Cost: ${o.cost} gold`;
+      const btn = document.createElement("button");
+      btn.textContent = "Buy";
+      btn.disabled = o.count <= 0 || gold < o.cost;
+      btn.addEventListener("click", () => {
+        if (o.count <= 0) return;
+        if (!spendGold(o.cost)) return;
+        inv.add(o.id, 1);
+        o.count -= 1;
+        hud.refresh();
+        refreshTradePanel();
+      });
+      row.append(icon, name, cost, btn);
+      tradeList.append(row);
+    });
+  }
+  function openTrader(x, y, z) {
+    tradePos = { x, y, z };
+    tradeOpen = true;
+    world.getTrader(x, y, z); // lazily create offers if missing
+    document.exitPointerLock?.();
+    tradePanel.classList.remove("hidden");
+    refreshTradePanel();
+  }
+  function closeTrader() {
+    tradeOpen = false;
+    tradePos = null;
+    tradePanel.classList.add("hidden");
+    showResume();
+  }
+  $("#trade-close").addEventListener("click", closeTrader);
   $("#chest-close").addEventListener("click", closeChest);
 
   let recipeSig = "";
@@ -896,12 +977,14 @@ async function main() {
     }
     if (input.justPressed.has("KeyE")) {
       if (chestOpen) closeChest();
+      else if (tradeOpen) closeTrader();
       else toggleCraft();
     }
     if (input.justPressed.has("Tab") || input.justPressed.has("KeyI")) toggleInv();
     if (input.justPressed.has("KeyR") && !chestOpen) openNearestChest();
     if (input.justPressed.has("KeyF")) player.toggleFly();
     if (input.justPressed.has("Escape") && chestOpen) closeChest();
+    if (input.justPressed.has("Escape") && tradeOpen) closeTrader();
 
     if (craftOpen) {
       refreshCraftIfOpen();
@@ -916,6 +999,12 @@ async function main() {
     }
     if (chestOpen) {
       refreshChestPanel();
+      input.endFrame();
+      renderer.render(scene, camera);
+      return;
+    }
+    if (tradeOpen) {
+      refreshTradePanel();
       input.endFrame();
       renderer.render(scene, camera);
       return;

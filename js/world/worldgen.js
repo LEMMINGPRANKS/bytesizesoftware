@@ -58,13 +58,17 @@ export function generateChunk(cx, cz, noise) {
         else if (y >= surface - 3) id = B.DIRT;
         else id = B.STONE;
 
-        // Ore veins underground. Use value noise above a per-ore threshold so
-        // veins cluster naturally; deeper ores are rarer and deeper-only.
+        // Ore veins underground. Two-octave noise check produces smaller,
+        // more scattered veins than a single threshold.
         if (id === B.STONE) {
           for (const [oreId, ore] of ORE_TABLE) {
             const depth = surface - y;
-            if (depth >= ore.minDepth &&
-                noise.noise3(wx * 0.1 + oreId, y * 0.1, wz * 0.1) > ore.threshold) {
+            if (depth < ore.minDepth) continue;
+            const f = ore.freq || 0.15;
+            const a = noise.noise3(wx * f + oreId, y * f, wz * f);
+            const b = noise.noise3(wx * f * 2.3 + 99, y * f * 2.3 + 99, wz * f * 2.3 - 99);
+            // Both octaves must clear (threshold - margin) so veins stay small.
+            if (a > ore.threshold && b > ore.threshold - 0.08) {
               id = oreId; break;
             }
           }
@@ -118,6 +122,72 @@ export function generateChunk(cx, cz, noise) {
         }
   }
 
+  // Trading house: rare, deterministic structure (~1 per 250 blocks).
+  tryPlaceTradingHouse(chunk, baseX, baseZ, noise);
+
   chunk.dirty = true;
   return chunk;
+}
+
+// Probability per chunk ≈ CHUNK_SIZE² / 250². A hash on chunk coords decides
+// whether this chunk gets a house. Density is roughly one house per 250×250
+// block area — explorable but not dense.
+const TRADER_DENSITY = (CHUNK_SIZE * CHUNK_SIZE) / (250 * 250);
+function tryPlaceTradingHouse(chunk, baseX, baseZ, noise) {
+  // Deterministic per-chunk hash so the house is at the same place every load.
+  if (noise.hash(baseX, 4242, baseZ) >= TRADER_DENSITY) return false;
+  // House footprint: 5x5 centered at (cx, _, cz), well inside chunk bounds.
+  const cx = 7, cz = 7;
+  const floorY = Math.max(W.seaLevel + 1, surfaceHeightAt(chunk, cx, cz));
+  if (floorY + 5 >= CHUNK_HEIGHT) return false;
+  // Bail if the ground floor is water — we don't want houses in the ocean.
+  const ground = chunk.blocks[chunk.idx(cx, floorY - 1, cz)];
+  if (ground === B.WATER || ground === B.AIR) return false;
+  // Center the 5x5 footprint on (cx, cz): columns cx-2..cx+2.
+  const x0 = cx - 2, x1 = cx + 2, z0 = cz - 2, z1 = cz + 2;
+  for (let y = floorY; y <= floorY + 4; y++) {
+    for (let x = x0; x <= x1; x++) {
+      for (let z = z0; z <= z1; z++) {
+        const isWall = (x === x0 || x === x1 || z === z0 || z === z1);
+        if (y === floorY) {
+          // Solid plank floor so the trader has a clean surface.
+          chunk.blocks[chunk.idx(x, y, z)] = B.PLANKS;
+        } else if (y === floorY + 4) {
+          // Roof: beam-bordered planks.
+          chunk.blocks[chunk.idx(x, y, z)] = (x === x0 || x === x1 || z === z0 || z === z1) ? B.BEAM : B.PLANKS;
+        } else if (isWall) {
+          // Walls: planks with a door on the +z side and a torch opposite.
+          if (x === cx && z === z1) {
+            // Door gap — handled below.
+            chunk.blocks[chunk.idx(x, y, z)] = B.AIR;
+          } else {
+            chunk.blocks[chunk.idx(x, y, z)] = B.PLANKS;
+          }
+        } else {
+          // Interior: clear air, drop a trader block in the centre on the
+          // first above-floor layer.
+          chunk.blocks[chunk.idx(x, y, z)] = B.AIR;
+        }
+      }
+    }
+  }
+  // Place the trader block in the centre on the floor.
+  chunk.blocks[chunk.idx(cx, floorY + 1, cz)] = B.TRADER;
+  // Door on the +z face, two blocks tall.
+  chunk.blocks[chunk.idx(cx, floorY + 1, z1)] = B.DOOR;
+  chunk.blocks[chunk.idx(cx, floorY + 2, z1)] = B.DOOR_TOP;
+  // Torch on the back wall for light.
+  chunk.blocks[chunk.idx(cx, floorY + 2, z0)] = B.TORCH;
+  // Mark this chunk as containing a trader so the World class can resolve
+  // initial offers later (via lazy generation in world.getTrader).
+  chunk.hasTrader = true;
+  return true;
+}
+// Local surface height (highest non-air, non-liquid block in column).
+function surfaceHeightAt(chunk, x, z) {
+  for (let y = CHUNK_HEIGHT - 1; y >= 0; y--) {
+    const b = chunk.blocks[chunk.idx(x, y, z)];
+    if (b !== B.AIR && b !== B.WATER && b !== B.LEAVES) return y;
+  }
+  return 0;
 }

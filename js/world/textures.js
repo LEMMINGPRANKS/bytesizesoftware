@@ -272,6 +272,30 @@ function drawTexture(id, face) {
       }
       break;
     }
+    case B.TRADER: {
+      // Market stall front: striped awning over a wooden counter.
+      fillNoise(ctx, hexToRgb("#7a4a1a"), 14);          // wood base
+      // Striped awning across the top half.
+      const stripeCols = ["#d84030", "#f0e8c0"];
+      for (let x = 0; x < SIZE; x++) {
+        ctx.fillStyle = stripeCols[(x / 2) | 0 % 2 === (x % 2 < 1) ? 0 : 1];
+        ctx.fillStyle = (x >> 1) % 2 === 0 ? "#d84030" : "#f0e8c0";
+        ctx.fillRect(x, 0, 1, 6);
+      }
+      // Counter line
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(0, 7, SIZE, 1);
+      // Gold coin emblem in the centre.
+      ctx.fillStyle = "#ffd040";
+      ctx.beginPath();
+      ctx.arc(SIZE / 2, 11, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#b88800";
+      ctx.beginPath();
+      ctx.arc(SIZE / 2, 11, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
     case B.RAW_BEEF: {
       fillNoise(ctx, base, 22);
       specks(ctx, "#f0c0c0", 10); // fat

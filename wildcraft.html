@@ -100,6 +100,22 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #87ceeb;
 #chest-grid, #chest-player-grid, #chest-player-hotbar { display: grid;
   grid-template-columns: repeat(9, 54px); gap: 6px; padding: 8px;
   background: rgba(0,0,0,0.3); border-radius: 8px; }
+#trade-panel { position: fixed; inset: 0; background: rgba(15,22,30,0.96); z-index: 11;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; }
+#trade-panel h2 { color: #ffd479; }
+#trade-list { display: flex; flex-direction: column; gap: 6px;
+  background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; min-width: 380px; }
+.trade-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px;
+  background: rgba(255,255,255,0.06); border-radius: 6px; border: 1px solid #444; }
+.trade-row .icon { width: 38px; height: 38px; background-size: contain;
+  background-position: center; background-repeat: no-repeat; image-rendering: pixelated; }
+.trade-row .name { flex: 1; font-size: 14px; }
+.trade-row .cost { font-size: 13px; color: #ffd040; min-width: 90px; text-align: right; }
+.trade-row button { padding: 6px 12px; font-size: 14px; background: #4a8; color: #fff;
+  border: none; border-radius: 4px; cursor: pointer; }
+.trade-row button:disabled { background: #555; cursor: not-allowed; }
+.trade-row.out { opacity: 0.4; }
 #chest-player-hotbar { margin-top: 6px; }
 .inv-slot { width: 54px; height: 54px; border: 2px solid #555; border-radius: 6px;
   background: rgba(255,255,255,0.06); position: relative; cursor: pointer;
@@ -152,7 +168,7 @@ label { display: inline-block; }
   </div>
   <div id="target-info" class="hidden"></div>
 </div>
-<div id="version-tag">1.0.2</div>
+<div id="version-tag">22.0</div>
 <div id="craft-panel" class="hidden">
   <h2>Crafting</h2>
   <div id="recipe-list"></div>
@@ -171,6 +187,12 @@ label { display: inline-block; }
   <div id="chest-player-grid"></div>
   <div id="chest-player-hotbar"></div>
   <button id="chest-close">Close [E]</button>
+</div>
+<div id="trade-panel" class="hidden">
+  <h2>Trader</h2>
+  <p id="trade-gold" style="font-size:14px;opacity:0.85;">Your gold: 0</p>
+  <div id="trade-list"></div>
+  <button id="trade-close">Close [E]</button>
 </div>
 <div id="resume-overlay" class="hidden">
   <h2>Paused</h2>
@@ -53740,10 +53762,13 @@ const CONFIG = {
     baseTime: 0.55,       // seconds per block hardness unit
   },
   ores: {
-    iron:    { minDepth: 4,  threshold: 0.82, color: "#caa472" },
-    gold:    { minDepth: 12, threshold: 0.90, color: "#ffd700" },
-    diamond: { minDepth: 22, threshold: 0.93, color: "#7afcff" },
-    platinum:{ minDepth: 32, threshold: 0.95, color: "#e8e8f0" },
+    // Higher frequency in worldgen → smaller, more scattered veins. Lower
+    // thresholds for the rare tiers so they appear more often despite each
+    // vein being smaller.
+    iron:    { minDepth: 4,  threshold: 0.80, color: "#caa472", freq: 0.16 },
+    gold:    { minDepth: 10, threshold: 0.84, color: "#ffd700", freq: 0.16 },
+    diamond: { minDepth: 18, threshold: 0.88, color: "#7afcff", freq: 0.18 },
+    platinum:{ minDepth: 28, threshold: 0.90, color: "#e8e8f0", freq: 0.18 },
   },
   tree: {
     minHeight: 4,
@@ -53772,6 +53797,7 @@ const B = {
   SEAGRASS: 34, RAW_FISH: 35, COOKED_FISH: 36,
   CHEST: 37,
   DOOR: 38, DOOR_TOP: 39,
+  TRADER: 40,
 };
 
 const BLOCKS = {
@@ -53798,6 +53824,7 @@ const BLOCKS = {
   [B.CHEST]: { name: "chest", solid: true, hardness: 1.0, color: "#8a5a2a", interactive: true },
   [B.DOOR]: { name: "door", solid: true, hardness: 1.0, color: "#a07a3a", interactive: true, transparent: true, door: true },
   [B.DOOR_TOP]: { name: "door_top", solid: false, hardness: 1.0, color: "#a07a3a", transparent: true, decor: true, door: true },
+  [B.TRADER]: { name: "trader", solid: true, hardness: 2.0, color: "#5a3a1a", interactive: true, trader: true },
   [B.COBBLE]: { name: "cobble", solid: true, hardness: 1.8, color: "#7c7c80", toolTier: 1 },
   [B.WALL_STONE]: { name: "wall_stone", solid: true, hardness: 3.0, color: "#6e6e72", toolTier: 1 },
   [B.BRICK]: { name: "brick", solid: true, hardness: 2.5, color: "#a23a2a", toolTier: 1 },
@@ -54161,6 +54188,30 @@ function drawTexture(id, face) {
       }
       break;
     }
+    case B.TRADER: {
+      // Market stall front: striped awning over a wooden counter.
+      fillNoise(ctx, hexToRgb("#7a4a1a"), 14);          // wood base
+      // Striped awning across the top half.
+      const stripeCols = ["#d84030", "#f0e8c0"];
+      for (let x = 0; x < SIZE; x++) {
+        ctx.fillStyle = stripeCols[(x / 2) | 0 % 2 === (x % 2 < 1) ? 0 : 1];
+        ctx.fillStyle = (x >> 1) % 2 === 0 ? "#d84030" : "#f0e8c0";
+        ctx.fillRect(x, 0, 1, 6);
+      }
+      // Counter line
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(0, 7, SIZE, 1);
+      // Gold coin emblem in the centre.
+      ctx.fillStyle = "#ffd040";
+      ctx.beginPath();
+      ctx.arc(SIZE / 2, 11, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#b88800";
+      ctx.beginPath();
+      ctx.arc(SIZE / 2, 11, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
     case B.RAW_BEEF: {
       fillNoise(ctx, base, 22);
       specks(ctx, "#f0c0c0", 10); // fat
@@ -54488,13 +54539,17 @@ function generateChunk(cx, cz, noise) {
         else if (y >= surface - 3) id = B.DIRT;
         else id = B.STONE;
 
-        // Ore veins underground. Use value noise above a per-ore threshold so
-        // veins cluster naturally; deeper ores are rarer and deeper-only.
+        // Ore veins underground. Two-octave noise check produces smaller,
+        // more scattered veins than a single threshold.
         if (id === B.STONE) {
           for (const [oreId, ore] of ORE_TABLE) {
             const depth = surface - y;
-            if (depth >= ore.minDepth &&
-                noise.noise3(wx * 0.1 + oreId, y * 0.1, wz * 0.1) > ore.threshold) {
+            if (depth < ore.minDepth) continue;
+            const f = ore.freq || 0.15;
+            const a = noise.noise3(wx * f + oreId, y * f, wz * f);
+            const b = noise.noise3(wx * f * 2.3 + 99, y * f * 2.3 + 99, wz * f * 2.3 - 99);
+            // Both octaves must clear (threshold - margin) so veins stay small.
+            if (a > ore.threshold && b > ore.threshold - 0.08) {
               id = oreId; break;
             }
           }
@@ -54548,8 +54603,74 @@ function generateChunk(cx, cz, noise) {
         }
   }
 
+  // Trading house: rare, deterministic structure (~1 per 250 blocks).
+  tryPlaceTradingHouse(chunk, baseX, baseZ, noise);
+
   chunk.dirty = true;
   return chunk;
+}
+
+// Probability per chunk ≈ CHUNK_SIZE² / 250². A hash on chunk coords decides
+// whether this chunk gets a house. Density is roughly one house per 250×250
+// block area — explorable but not dense.
+const TRADER_DENSITY = (CHUNK_SIZE * CHUNK_SIZE) / (250 * 250);
+function tryPlaceTradingHouse(chunk, baseX, baseZ, noise) {
+  // Deterministic per-chunk hash so the house is at the same place every load.
+  if (noise.hash(baseX, 4242, baseZ) >= TRADER_DENSITY) return false;
+  // House footprint: 5x5 centered at (cx, _, cz), well inside chunk bounds.
+  const cx = 7, cz = 7;
+  const floorY = Math.max(W.seaLevel + 1, surfaceHeightAt(chunk, cx, cz));
+  if (floorY + 5 >= CHUNK_HEIGHT) return false;
+  // Bail if the ground floor is water — we don't want houses in the ocean.
+  const ground = chunk.blocks[chunk.idx(cx, floorY - 1, cz)];
+  if (ground === B.WATER || ground === B.AIR) return false;
+  // Center the 5x5 footprint on (cx, cz): columns cx-2..cx+2.
+  const x0 = cx - 2, x1 = cx + 2, z0 = cz - 2, z1 = cz + 2;
+  for (let y = floorY; y <= floorY + 4; y++) {
+    for (let x = x0; x <= x1; x++) {
+      for (let z = z0; z <= z1; z++) {
+        const isWall = (x === x0 || x === x1 || z === z0 || z === z1);
+        if (y === floorY) {
+          // Solid plank floor so the trader has a clean surface.
+          chunk.blocks[chunk.idx(x, y, z)] = B.PLANKS;
+        } else if (y === floorY + 4) {
+          // Roof: beam-bordered planks.
+          chunk.blocks[chunk.idx(x, y, z)] = (x === x0 || x === x1 || z === z0 || z === z1) ? B.BEAM : B.PLANKS;
+        } else if (isWall) {
+          // Walls: planks with a door on the +z side and a torch opposite.
+          if (x === cx && z === z1) {
+            // Door gap — handled below.
+            chunk.blocks[chunk.idx(x, y, z)] = B.AIR;
+          } else {
+            chunk.blocks[chunk.idx(x, y, z)] = B.PLANKS;
+          }
+        } else {
+          // Interior: clear air, drop a trader block in the centre on the
+          // first above-floor layer.
+          chunk.blocks[chunk.idx(x, y, z)] = B.AIR;
+        }
+      }
+    }
+  }
+  // Place the trader block in the centre on the floor.
+  chunk.blocks[chunk.idx(cx, floorY + 1, cz)] = B.TRADER;
+  // Door on the +z face, two blocks tall.
+  chunk.blocks[chunk.idx(cx, floorY + 1, z1)] = B.DOOR;
+  chunk.blocks[chunk.idx(cx, floorY + 2, z1)] = B.DOOR_TOP;
+  // Torch on the back wall for light.
+  chunk.blocks[chunk.idx(cx, floorY + 2, z0)] = B.TORCH;
+  // Mark this chunk as containing a trader so the World class can resolve
+  // initial offers later (via lazy generation in world.getTrader).
+  chunk.hasTrader = true;
+  return true;
+}
+// Local surface height (highest non-air, non-liquid block in column).
+function surfaceHeightAt(chunk, x, z) {
+  for (let y = CHUNK_HEIGHT - 1; y >= 0; y--) {
+    const b = chunk.blocks[chunk.idx(x, y, z)];
+    if (b !== B.AIR && b !== B.WATER && b !== B.LEAVES) return y;
+  }
+  return 0;
 }
 
   window.generateChunk = typeof generateChunk !== 'undefined' ? generateChunk : undefined;
@@ -54619,12 +54740,12 @@ function addCross(layer, x, y, z, id, w, h) {
   }
 }
 
-// Adds a 3D torch: a thin stick box with a small flame cube on top. Both
-// pieces sample the torch texture (which already has a brown stick and an
-// orange flame). Real lighting comes from a PointLight pool in main.js that
-// tracks the nearest torches.
-function addBox(layer, x0, y0, z0, x1, y1, z1, id, faceIdx = 2) {
-  const [u0, v0, u1, v1] = atlasUV(id, faceIdx);
+// Adds a 3D torch: a thin stick box with a small flame cube on top. The
+// stick samples only the brown-stick column of the torch tile, and the
+// flame samples only the orange-flame top — otherwise every face of every
+// box shows a full torch sprite and one placed torch looks like a cluster.
+// Real lighting comes from the PointLight pool in main.js.
+function addBoxUV(layer, x0, y0, z0, x1, y1, z1, u0, v0, u1, v1) {
   const faces = [
     { dir: [ 1, 0, 0], corners: [[x1,y0,z1],[x1,y1,z1],[x1,y1,z0],[x1,y0,z0]] },
     { dir: [-1, 0, 0], corners: [[x0,y0,z0],[x0,y1,z0],[x0,y1,z1],[x0,y0,z1]] },
@@ -54642,10 +54763,27 @@ function addBox(layer, x0, y0, z0, x1, y1, z1, id, faceIdx = 2) {
   }
 }
 function addTorch(layer, x, y, z, id) {
-  // Stick: thin vertical box from y=0 to y=0.55, centered in the cell.
-  addBox(layer, x + 0.43, y + 0.00, z + 0.43, x + 0.57, y + 0.55, z + 0.57, id);
-  // Flame head: slightly wider cube on top so it reads as fire from any angle.
-  addBox(layer, x + 0.38, y + 0.55, z + 0.38, x + 0.62, y + 0.72, z + 0.62, id);
+  // Sub-rect within the torch tile. Tile pixel coords are 0..16 with V
+  // flipped to match Three.js. Stick = central brown column (px x:7..9,
+  // y:6..16). Flame = orange head (px x:6..10, y:3..7).
+  const [tu0, tv0, tu1, tv1] = atlasUV(id, 2);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  // Stick sub-rect (centre column, lower 5/8 of tile).
+  const su0 = lerp(tu0, tu1, 7 / 16);
+  const su1 = lerp(tu0, tu1, 9 / 16);
+  // Tile V is bottom-up; the stick occupies the bottom portion (y=6..16 in
+  // top-down canvas pixels = top 10/16 of the flipped tile, so we take the
+  // bottom 10/16 of the tile).
+  const sv0 = lerp(tv0, tv1, 0);
+  const sv1 = lerp(tv0, tv1, 10 / 16);
+  addBoxUV(layer, x + 0.43, y + 0.00, z + 0.43, x + 0.57, y + 0.55, z + 0.57, su0, sv0, su1, sv1);
+  // Flame sub-rect (top-centre 4x4 px block).
+  const fu0 = lerp(tu0, tu1, 6 / 16);
+  const fu1 = lerp(tu0, tu1, 10 / 16);
+  // Flame is at top-down y:3..7 → bottom-up: 16-7=9 to 16-3=13 → mid tile.
+  const fv0 = lerp(tv0, tv1, 9 / 16);
+  const fv1 = lerp(tv0, tv1, 13 / 16);
+  addBoxUV(layer, x + 0.38, y + 0.55, z + 0.38, x + 0.62, y + 0.72, z + 0.62, fu0, fv0, fu1, fv1);
 }
 
 // Door panel — thin slab (0.15 thick) that spans the cell. Two quads (front +
@@ -54798,6 +54936,38 @@ function buildChunkMesh(chunk, world) {
 (function () {
 // World manager: owns chunks, generation, block get/set across boundaries,
 // and per-frame chunk streaming around the player.
+// Trade pool: each entry is {id, count, cost}. Traders roll a small random
+// selection from this list. Costs are in gold-coin units (player pays with
+// GOLD_BLOCK items, which are 9 ore → fair-priced for early-game access).
+const TRADE_POOL = [
+  { id: B.RAW_BEEF,     count: 2, cost: 1 },
+  { id: B.RAW_FISH,     count: 3, cost: 1 },
+  { id: B.COOKED_BEEF,  count: 1, cost: 2 },
+  { id: B.COOKED_FISH,  count: 2, cost: 2 },
+  { id: B.TORCH,        count: 8, cost: 1 },
+  { id: B.PLANKS,       count: 16, cost: 1 },
+  { id: B.WALL_STONE,   count: 8, cost: 2 },
+  { id: B.BRICK,        count: 8, cost: 2 },
+  { id: B.GLASS,        count: 6, cost: 2 },
+  { id: B.PICKAXE_IRON, count: 1, cost: 3 },
+  { id: B.PICKAXE_DIAMOND, count: 1, cost: 6 },
+  { id: B.CHEST,        count: 1, cost: 2 },
+  { id: B.DOOR,         count: 2, cost: 1 },
+  { id: B.IRON_BLOCK,   count: 1, cost: 4 },
+  { id: B.GOLD_BLOCK,   count: 1, cost: 5 },
+];
+function makeTraderOffers() {
+  // Pick 5 distinct items from the pool, copying so callers can mutate counts.
+  const pool = TRADE_POOL.slice();
+  const offers = [];
+  for (let i = 0; i < 5 && pool.length; i++) {
+    const idx = (Math.random() * pool.length) | 0;
+    const o = pool.splice(idx, 1)[0];
+    offers.push({ id: o.id, count: o.count, cost: o.cost });
+  }
+  return offers;
+}
+
 class World {
   constructor(scene, seed = (Math.random() * 1e9) | 0) {
     this.scene = scene;
@@ -54811,6 +54981,7 @@ class World {
     this.chests = new Map();     // `${wx},${wy},${wz}` -> Array(27) of slot ids or null
     this.doors = new Set();      // `${bx},${by},${bz}` (bottom block) of open doors
     this.torches = new Set();    // `${wx},${wy},${wz}` of placed torches
+    this.traders = new Map();    // `${wx},${wy},${wz}` -> [{id, count, cost}, ...]
   }
   static modKey(x, y, z) { return `${x},${y},${z}`; }
   // 27-slot chest inventory at a position, created lazily.
@@ -54821,6 +54992,16 @@ class World {
     return c;
   }
   removeChest(x, y, z) { this.chests.delete(World.modKey(x, y, z)); }
+  // Per-position trader inventory. A trader is a block with a small set of
+  // trade offers generated when the structure is built. Returns the offers
+  // array, creating it lazily so legacy saves without trader data work too.
+  getTrader(x, y, z) {
+    const k = World.modKey(x, y, z);
+    let t = this.traders.get(k);
+    if (!t) { t = makeTraderOffers(); this.traders.set(k, t); }
+    return t;
+  }
+  removeTrader(x, y, z) { this.traders.delete(World.modKey(x, y, z)); }
   // Door open/closed state. `bx,by,bz` is the BOTTOM block of the door.
   isDoorOpen(bx, by, bz) { return this.doors.has(`${bx},${by},${bz}`); }
   toggleDoor(bx, by, bz) {
@@ -55522,6 +55703,7 @@ const RECIPES = [
   { out: [B.ARCH, 1],      in: [{ id: B.BEAM, count: 2 }, { id: B.PLANKS, count: 1 }], name: "Arch" },
   { out: [B.CHEST, 1],     in: [{ id: B.PLANKS, count: 4 }], name: "Chest (27 storage slots)" },
   { out: [B.DOOR, 1],      in: [{ id: B.PLANKS, count: 3 }], name: "Door (right-click to open)" },
+  { out: [B.TRADER, 1],    in: [{ id: B.PLANKS, count: 4 }, { id: B.GOLD_ORE, count: 2 }], name: "Trader stall (build your own market)" },
   { out: [B.IRON_BLOCK, 1], in: [{ id: B.IRON_ORE, count: 9 }],       name: "Iron Block" },
   { out: [B.GOLD_BLOCK, 1], in: [{ id: B.GOLD_ORE, count: 9 }],       name: "Gold Block" },
   { out: [B.DIAMOND_BLOCK, 1], in: [{ id: B.DIAMOND_ORE, count: 9 }], name: "Diamond Block" },
@@ -55979,6 +56161,7 @@ class MobSystem {
     this.scene = scene;
     this.mobs = [];
     this.targetCount = 8;
+    this.fishTargetCount = 6;    // separate cap so cows can't starve fish
     this.spawnTimer = 0;
     this._aiAcc = 0;             // throttle AI updates for perf
   }
@@ -56000,36 +56183,40 @@ class MobSystem {
     return null;
   }
   _findWaterSpawn(playerPos) {
-    for (let attempt = 0; attempt < 10; attempt++) {
+    // The old check required water AT y+1 (the cell above the fish) AND
+    // y-1 to be non-air. At the surface (y = seaLevel), y+1 is air, so the
+    // check failed at every surface cell — fish essentially never spawned.
+    // Now we accept any submerged cell with solid ground below, scanning
+    // a wider ring with more attempts.
+    const sea = CONFIG.world.seaLevel;
+    for (let attempt = 0; attempt < 14; attempt++) {
       const ang = Math.random() * Math.PI * 2;
-      const r = 6 + Math.random() * 18;
+      const r = 4 + Math.random() * 22;
       const x = Math.floor(playerPos.x + Math.cos(ang) * r);
       const z = Math.floor(playerPos.z + Math.sin(ang) * r);
-      // Scan downward from sea level for a water column with room.
-      for (let y = 22; y > 2; y--) {
-        if (isLiquid(this.world.getBlock(x, y, z)) &&
-            this.world.getBlock(x, y + 1, z) === B.WATER &&
-            this.world.getBlock(x, y - 1, z) !== B.AIR) {
+      for (let y = sea; y > 1; y--) {
+        const here = this.world.getBlock(x, y, z);
+        const below = this.world.getBlock(x, y - 1, z);
+        if (here === B.WATER && below !== B.AIR && below !== B.WATER) {
           return new THREE.Vector3(x + 0.5, y, z + 0.5);
         }
       }
     }
     return null;
   }
+  _fishCount() { return this.mobs.reduce((n, m) => n + (m.isFish ? 1 : 0), 0); }
+  _cowCount() { return this.mobs.reduce((n, m) => n + (m.isFish ? 0 : 1), 0); }
   update(dt, playerPos) {
     this.spawnTimer -= dt;
-    if (this.spawnTimer <= 0 && this.mobs.length < this.targetCount) {
-      this.spawnTimer = 2 + Math.random() * 3;
-      // Try both spawn paths; bias by whether player is near water.
-      const wantsFish = Math.random() < 0.4;
-      if (wantsFish) {
+    if (this.spawnTimer <= 0) {
+      this.spawnTimer = 1.5 + Math.random() * 2.5;
+      // Spawn fish and cows independently up to their own caps so a saturated
+      // cow population doesn't block fish from ever appearing.
+      if (this._fishCount() < this.fishTargetCount) {
         const s = this._findWaterSpawn(playerPos);
-        if (s) this.mobs.push(new Fish(s, this.scene, this.world));
-        else {
-          const s2 = this._findSpawn(playerPos);
-          if (s2) this.mobs.push(new Cow(s2, this.scene, this.world));
-        }
-      } else {
+        if (s) { this.mobs.push(new Fish(s, this.scene, this.world)); return; }
+      }
+      if (this._cowCount() < this.targetCount) {
         const s = this._findSpawn(playerPos);
         if (s) this.mobs.push(new Cow(s, this.scene, this.world));
       }
@@ -56068,7 +56255,6 @@ class MobSystem {
     return best;
   }
 }
-
 
   window.MobSystem = typeof MobSystem !== 'undefined' ? MobSystem : undefined;
 })();
@@ -56416,6 +56602,7 @@ async function main() {
       modified: Object.fromEntries(world.modified),
       chests: Object.fromEntries(world.chests),
       doors: Array.from(world.doors),
+      traders: Object.fromEntries(world.traders),
     };
   }
 
@@ -56464,6 +56651,11 @@ async function main() {
       // The top half isn't a placeable item — drop a regular door instead.
       if (drop) { inv.remove(B.DOOR_TOP, 1); inv.add(B.DOOR, 1); }
     }
+    // Mining a trader drops the trader block only — its offer list is a
+    // service, not physical inventory, so there's nothing else to spill.
+    if (id === B.TRADER) {
+      world.removeTrader(x, y, z);
+    }
     hud.refresh();
     return true;
   }
@@ -56479,6 +56671,7 @@ async function main() {
       if (hitDef?.interactive) {
         if (hitId === B.CHEST) { openChest(t.x, t.y, t.z); return; }
         if (hitId === B.DOOR)  { toggleDoorAt(t.x, t.y, t.z); return; }
+        if (hitId === B.TRADER) { openTrader(t.x, t.y, t.z); return; }
       }
     }
     const sel = inv.selected();
@@ -56768,6 +56961,9 @@ async function main() {
     }
     if (saved && saved.doors) {
       for (const k of saved.doors) world.doors.add(k);
+    }
+    if (saved && saved.traders) {
+      for (const [k, v] of Object.entries(saved.traders)) world.traders.set(k, v);
     }
     // Rebuild the torch index from persisted block edits so the light pool
     // works immediately on load.
@@ -57135,6 +57331,77 @@ async function main() {
     chestPanel.classList.add("hidden");
     showResume();
   }
+
+  // ---- Trade panel (right-click trader block) ----
+  const tradePanel = $("#trade-panel");
+  const tradeList = $("#trade-list");
+  const tradeGold = $("#trade-gold");
+  let tradeOpen = false;
+  let tradePos = null;
+  function goldCount() { return inv.count(B.GOLD_ORE) + inv.count(B.GOLD_BLOCK) * 9; }
+  function spendGold(amount) {
+    // Prefer ore first (1 each), then break blocks into 9 ore as needed.
+    let remaining = amount;
+    const oreUsed = Math.min(inv.count(B.GOLD_ORE), remaining);
+    if (oreUsed > 0) { inv.remove(B.GOLD_ORE, oreUsed); remaining -= oreUsed; }
+    while (remaining > 0 && inv.count(B.GOLD_BLOCK) > 0) {
+      inv.remove(B.GOLD_BLOCK, 1);
+      inv.add(B.GOLD_ORE, 9);
+      const use = Math.min(9, remaining);
+      inv.remove(B.GOLD_ORE, use);
+      remaining -= use;
+    }
+    return remaining === 0;
+  }
+  function refreshTradePanel() {
+    if (!tradeOpen || !tradePos) return;
+    const offers = world.traders.get(World.modKey(tradePos.x, tradePos.y, tradePos.z)) || [];
+    const gold = goldCount();
+    tradeGold.textContent = `Your gold: ${gold} (ore = 1, block = 9)`;
+    tradeList.innerHTML = "";
+    offers.forEach((o, i) => {
+      const row = document.createElement("div");
+      row.className = "trade-row" + (o.count <= 0 ? " out" : "");
+      const icon = document.createElement("div");
+      icon.className = "icon";
+      const tex = getTexture(o.id, "side");
+      icon.style.backgroundImage = `url(${tex.image.toDataURL?.() || tex.image.src})`;
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = `${BLOCKS[o.id]?.name || "?"} ×${o.count}`;
+      const cost = document.createElement("div");
+      cost.className = "cost";
+      cost.textContent = `Cost: ${o.cost} gold`;
+      const btn = document.createElement("button");
+      btn.textContent = "Buy";
+      btn.disabled = o.count <= 0 || gold < o.cost;
+      btn.addEventListener("click", () => {
+        if (o.count <= 0) return;
+        if (!spendGold(o.cost)) return;
+        inv.add(o.id, 1);
+        o.count -= 1;
+        hud.refresh();
+        refreshTradePanel();
+      });
+      row.append(icon, name, cost, btn);
+      tradeList.append(row);
+    });
+  }
+  function openTrader(x, y, z) {
+    tradePos = { x, y, z };
+    tradeOpen = true;
+    world.getTrader(x, y, z); // lazily create offers if missing
+    document.exitPointerLock?.();
+    tradePanel.classList.remove("hidden");
+    refreshTradePanel();
+  }
+  function closeTrader() {
+    tradeOpen = false;
+    tradePos = null;
+    tradePanel.classList.add("hidden");
+    showResume();
+  }
+  $("#trade-close").addEventListener("click", closeTrader);
   $("#chest-close").addEventListener("click", closeChest);
 
   let recipeSig = "";
@@ -57186,12 +57453,14 @@ async function main() {
     }
     if (input.justPressed.has("KeyE")) {
       if (chestOpen) closeChest();
+      else if (tradeOpen) closeTrader();
       else toggleCraft();
     }
     if (input.justPressed.has("Tab") || input.justPressed.has("KeyI")) toggleInv();
     if (input.justPressed.has("KeyR") && !chestOpen) openNearestChest();
     if (input.justPressed.has("KeyF")) player.toggleFly();
     if (input.justPressed.has("Escape") && chestOpen) closeChest();
+    if (input.justPressed.has("Escape") && tradeOpen) closeTrader();
 
     if (craftOpen) {
       refreshCraftIfOpen();
@@ -57206,6 +57475,12 @@ async function main() {
     }
     if (chestOpen) {
       refreshChestPanel();
+      input.endFrame();
+      renderer.render(scene, camera);
+      return;
+    }
+    if (tradeOpen) {
+      refreshTradePanel();
       input.endFrame();
       renderer.render(scene, camera);
       return;

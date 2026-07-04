@@ -15,6 +15,7 @@ export const RECIPES = [
   { out: [B.ARCH, 1],      in: [{ id: B.BEAM, count: 2 }, { id: B.PLANKS, count: 1 }], name: "Arch" },
   { out: [B.CHEST, 1],     in: [{ id: B.PLANKS, count: 4 }], name: "Chest (27 storage slots)" },
   { out: [B.DOOR, 1],      in: [{ id: B.PLANKS, count: 3 }], name: "Door (right-click to open)" },
+  { out: [B.TRADER, 1],    in: [{ id: B.PLANKS, count: 4 }, { id: B.GOLD_ORE, count: 2 }], name: "Trader stall (build your own market)" },
   { out: [B.IRON_BLOCK, 1], in: [{ id: B.IRON_ORE, count: 9 }],       name: "Iron Block" },
   { out: [B.GOLD_BLOCK, 1], in: [{ id: B.GOLD_ORE, count: 9 }],       name: "Gold Block" },
   { out: [B.DIAMOND_BLOCK, 1], in: [{ id: B.DIAMOND_ORE, count: 9 }], name: "Diamond Block" },
