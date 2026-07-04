@@ -20,21 +20,27 @@ export function generateChunk(cx, cz, noise) {
   for (let x = 0; x < CHUNK_SIZE; x++) {
     for (let z = 0; z < CHUNK_SIZE; z++) {
       const wx = baseX + x, wz = baseZ + z;
+      // Domain warp: distort the input coordinates using a low-frequency
+      // noise so coastlines and biomes curve organically instead of
+      // lining up with the chunk grid.
+      const warpX = (noise.height(wx * 0.004 + 333, wz * 0.004, 2) - 0.5) * 18;
+      const warpZ = (noise.height(wx * 0.004 - 222, wz * 0.004 + 111, 2) - 0.5) * 18;
+      const sx = wx + warpX, sz = wz + warpZ;
+
       // Layered height: gentle hills + occasional dramatic mountains.
-      let hill = (noise.height(wx * 0.012, wz * 0.012, 5) - 0.5) * 2;
-      const mtnNoise = noise.height(wx * 0.005 + 100, wz * 0.005 - 50, 3);
-      const mtnMask = Math.max(0, mtnNoise - 0.55) / 0.45;  // 0..1, only on peaks
-      const mtn = mtnMask * mtnMask;                          // sharpen ridges
-      // Continent mask: very low-frequency noise that decides ocean vs land.
-      // Below the threshold, terrain gets shoved firmly underwater with damp
-      // hills so we get proper seas, not puddles.
-      const cont = noise.height(wx * 0.0015 + 999, wz * 0.0015 - 999, 2);
-      let dip = 0;
-      if (cont < 0.58) {
-        const ocean = (0.58 - cont) / 0.58;          // 0..1, deeper inland of ocean
-        dip = 18 + ocean * ocean * 50;                // 18..68 guaranteed dip
-        hill *= 0.25;                                  // flatten seabed
-      }
+      let hill = (noise.height(sx * 0.012, sz * 0.012, 5) - 0.5) * 2;
+      const mtnNoise = noise.height(sx * 0.005 + 100, sz * 0.005 - 50, 3);
+      const mtnMask = Math.max(0, mtnNoise - 0.55) / 0.45;
+      const mtn = mtnMask * mtnMask;
+
+      // Continent mask — smooth, continuous. `oceanFactor` runs 0 (deep
+      // ocean) → 1 (interior) and is squared for flatter seabeds. No hard
+      // cutoff means no cliffs at the coast.
+      const cont = noise.height(sx * 0.0015 + 999, sz * 0.0015 - 999, 2);
+      const oceanFactor = Math.max(0, Math.min(1, cont / 0.55)); // 0..1
+      const dip = (1 - oceanFactor) * (1 - oceanFactor) * 48;    // 0..48
+      hill *= 0.25 + oceanFactor * 0.75;                          // flatten hills underwater
+
       const h = Math.floor(W.baseHeight + hill * W.hillHeight + mtn * W.mountainHeight - dip);
       const surface = Math.max(1, Math.min(CHUNK_HEIGHT - 6, h));
 
