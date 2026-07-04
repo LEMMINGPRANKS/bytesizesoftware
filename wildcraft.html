@@ -55568,7 +55568,9 @@ async function main() {
   function placeBlock() {
     const sel = inv.selected();
     if (sel === null) return;
-    if (BLOCKS[sel]?.food) { eat(sel); return; }
+    const def = BLOCKS[sel];
+    if (def?.food) { eat(sel); return; }
+    if (def?.item) return; // don't place tools/items in the world
     const t = mining.acquire(player);
     if (!t) return;
     const px = t.x + t.face[0], py = t.y + t.face[1], pz = t.z + t.face[2];
