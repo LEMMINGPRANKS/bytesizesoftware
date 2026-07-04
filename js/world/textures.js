@@ -186,6 +186,49 @@ function drawTexture(id, face) {
       break;
     }
     case B.BEDROCK: fillNoise(ctx, base, 10); specks(ctx, "#000", 20); break;
+    case B.SEAGRASS: {
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      const rng = mulberry(7);
+      // Wavy green blades
+      for (let i = 0; i < 6; i++) {
+        const bx = (rng() * SIZE) | 0;
+        ctx.strokeStyle = i % 2 ? "#3a8a4a" : "#2a6a3a";
+        ctx.lineWidth = 1 + ((rng() * 2) | 0);
+        ctx.beginPath();
+        let yy = SIZE;
+        ctx.moveTo(bx, yy);
+        for (let s = 0; s < 6; s++) {
+          yy -= 2 + (rng() * 2);
+          ctx.lineTo(bx + Math.sin(s + i) * 2, yy);
+        }
+        ctx.stroke();
+      }
+      break;
+    }
+    case B.RAW_FISH: {
+      fillNoise(ctx, base, 12);
+      ctx.strokeStyle = "rgba(120,150,160,0.6)";
+      ctx.beginPath();
+      ctx.moveTo(2, 8); ctx.bezierCurveTo(5, 4, 11, 4, 13, 8);
+      ctx.bezierCurveTo(11, 12, 5, 12, 2, 8); ctx.stroke();
+      ctx.fillStyle = "#3a4a5a";
+      ctx.fillRect(13, 6, 2, 4); // tail
+      ctx.fillStyle = "#1a2a3a";
+      ctx.fillRect(4, 7, 1, 1); // eye
+      break;
+    }
+    case B.COOKED_FISH: {
+      fillNoise(ctx, base, 14);
+      ctx.strokeStyle = "rgba(140,90,40,0.6)";
+      ctx.beginPath();
+      ctx.moveTo(2, 8); ctx.bezierCurveTo(5, 4, 11, 4, 13, 8);
+      ctx.bezierCurveTo(11, 12, 5, 12, 2, 8); ctx.stroke();
+      ctx.fillStyle = "#7a4a1a";
+      ctx.fillRect(13, 6, 2, 4);
+      ctx.fillStyle = "#2a1a08";
+      ctx.fillRect(4, 7, 1, 1);
+      break;
+    }
     case B.RAW_BEEF: {
       fillNoise(ctx, base, 22);
       specks(ctx, "#f0c0c0", 10); // fat

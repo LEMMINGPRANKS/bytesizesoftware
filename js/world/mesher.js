@@ -36,6 +36,35 @@ function disposeMesh(m) {
   if (m.geometry) m.geometry.dispose();
 }
 
+// Crossed quads that span the cell — used for seagrass. `w` is half-width
+// in x/z, `h` is height in y.
+function addCross(layer, x, y, z, id, w, h) {
+  const cx = x + 0.5, cz = z + 0.5;
+  const baseY = y, topY = y + h;
+  const [u0, v0, u1, v1] = atlasUV(id, 2);
+  const pts = [
+    [
+      [cx - w, baseY, cz - w],
+      [cx - w, topY,  cz - w],
+      [cx + w, topY,  cz + w],
+      [cx + w, baseY, cz + w],
+    ],
+    [
+      [cx + w, baseY, cz - w],
+      [cx + w, topY,  cz - w],
+      [cx - w, topY,  cz + w],
+      [cx - w, baseY, cz + w],
+    ],
+  ];
+  for (const quadPts of pts) {
+    const vIdx = layer.positions.length / 3;
+    for (const p of quadPts) layer.positions.push(p[0], p[1], p[2]);
+    for (let i = 0; i < 4; i++) layer.normals.push(0, 0, 1);
+    layer.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
+    layer.indices.push(vIdx, vIdx + 1, vIdx + 2, vIdx, vIdx + 2, vIdx + 3);
+  }
+}
+
 // Adds a torch as two crossed quads centered in the cell, smaller than full block.
 function addTorch(layer, x, y, z, id) {
   const cx = x + 0.5, cz = z + 0.5;
@@ -89,9 +118,13 @@ export function buildChunkMesh(chunk, world) {
         const isTransparent = !!def?.transparent;
         const isLiquid = !!def?.liquid;
 
-        // Decor: torches render as crossed quads instead of a full cube.
+        // Decor: torches and seagrass render as crossed quads.
         if (id === B.TORCH) {
           addTorch(transparent, x, y, z, id);
+          continue;
+        }
+        if (id === B.SEAGRASS) {
+          addCross(transparent, x, y, z, id, 0.45, 1.0);
           continue;
         }
 

@@ -18,6 +18,7 @@ export const RECIPES = [
   { out: [B.DIAMOND_BLOCK, 1], in: [{ id: B.DIAMOND_ORE, count: 9 }], name: "Diamond Block" },
   { out: [B.PLATINUM_BLOCK, 1], in: [{ id: B.PLATINUM_ORE, count: 9 }], name: "Platinum Block" },
   { out: [B.COOKED_BEEF, 1], in: [{ id: B.RAW_BEEF, count: 1 }], name: "Cook Raw Beef (needs fireplace)", needsFire: true },
+  { out: [B.COOKED_FISH, 1], in: [{ id: B.RAW_FISH, count: 1 }], name: "Cook Raw Fish (needs fireplace)", needsFire: true },
   { out: [B.PICKAXE_WOOD, 1],     in: [{ id: B.PLANKS, count: 3 }, { id: B.BEAM, count: 1 }],            name: "Wood Pickaxe (mines stone)" },
   { out: [B.PICKAXE_STONE, 1],    in: [{ id: B.COBBLE, count: 3 }, { id: B.BEAM, count: 1 }],            name: "Stone Pickaxe (mines iron, gold)" },
   { out: [B.PICKAXE_IRON, 1],     in: [{ id: B.IRON_BLOCK, count: 1 }, { id: B.BEAM, count: 1 }],        name: "Iron Pickaxe (mines diamond)" },

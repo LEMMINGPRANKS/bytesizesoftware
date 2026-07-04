@@ -162,10 +162,14 @@ async function main() {
     const cow = mobs.raycast(origin, dir, CONFIG.mining.range + 1);
     if (cow) {
       const wasAlive = cow.alive;
-      cow.hit(4, player.pos);
+      cow.hit(cow.isFish ? 4 : 4, player.pos);
       if (wasAlive && !cow.alive) {
-        const drop = 2 + (Math.random() * 2 | 0);
-        inv.add(B.RAW_BEEF, drop);
+        if (cow.isFish) {
+          inv.add(B.RAW_FISH, 1);
+        } else {
+          const drop = 2 + (Math.random() * 2 | 0);
+          inv.add(B.RAW_BEEF, drop);
+        }
         hud.refresh();
       }
     }

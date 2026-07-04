@@ -83,6 +83,13 @@ export function generateChunk(cx, cz, noise) {
         for (let y = surface + 1; y <= W.seaLevel; y++) {
           chunk.blocks[chunk.idx(x, y, z)] = B.WATER;
         }
+        // Seagrass on the seabed if it's not too deep (≤ 4 blocks of water).
+        if (W.seaLevel - surface <= 4 &&
+            (chunk.blocks[chunk.idx(x, surface, z)] === B.SAND ||
+             chunk.blocks[chunk.idx(x, surface, z)] === B.DIRT) &&
+            noise.hash(wx, 29, wz) < 0.08) {
+          chunk.blocks[chunk.idx(x, surface + 1, z)] = B.SEAGRASS;
+        }
       }
       // Trees on grass, above sea, not at chunk border so we don't straddle.
       if (chunk.blocks[chunk.idx(x, surface, z)] === B.GRASS &&

@@ -25,6 +25,7 @@ MODULES = [
     "js/gameplay/crafting.js",
     "js/gameplay/trees.js",
     "js/entities/cow.js",
+    "js/entities/fish.js",
     "js/gameplay/mobs.js",
     "js/ui/hud.js",
     "js/save/saveManager.js",

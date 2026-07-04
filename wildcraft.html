@@ -137,7 +137,7 @@ label { display: inline-block; }
   </div>
   <div id="target-info" class="hidden"></div>
 </div>
-<div id="version-tag">0.16</div>
+<div id="version-tag">release-window-17.0</div>
 <div id="craft-panel" class="hidden">
   <h2>Crafting</h2>
   <div id="recipe-list"></div>
@@ -53745,6 +53745,7 @@ const B = {
   RAW_BEEF: 27, COOKED_BEEF: 28,
   PICKAXE_WOOD: 29, PICKAXE_IRON: 30, PICKAXE_DIAMOND: 31, PICKAXE_PLATINUM: 32,
   PICKAXE_STONE: 33,
+  SEAGRASS: 34, RAW_FISH: 35, COOKED_FISH: 36,
 };
 
 const BLOCKS = {
@@ -53765,6 +53766,9 @@ const BLOCKS = {
   [B.DIAMOND_ORE]: { name: "diamond_ore", solid: true, hardness: 4.0, color: "#7afcff", toolTier: 3 },
   [B.PLATINUM_ORE]: { name: "platinum_ore", solid: true, hardness: 5.0, color: "#e8e8f0", toolTier: 4 },
   [B.PICKAXE_STONE]: { name: "pickaxe_stone", solid: false, hardness: 0.1, color: "#9a9a9a", item: true, tool: "pickaxe", toolTier: 2 },
+  [B.SEAGRASS]: { name: "seagrass", solid: false, hardness: 0.1, color: "#2a7a3a", transparent: true, decor: true },
+  [B.RAW_FISH]: { name: "raw_fish", solid: false, hardness: 0.1, color: "#c8d8e0", item: true, food: 2 },
+  [B.COOKED_FISH]: { name: "cooked_fish", solid: false, hardness: 0.1, color: "#e8c890", item: true, food: 7 },
   [B.COBBLE]: { name: "cobble", solid: true, hardness: 1.8, color: "#7c7c80", toolTier: 1 },
   [B.WALL_STONE]: { name: "wall_stone", solid: true, hardness: 3.0, color: "#6e6e72", toolTier: 1 },
   [B.BRICK]: { name: "brick", solid: true, hardness: 2.5, color: "#a23a2a", toolTier: 1 },
@@ -54042,6 +54046,49 @@ function drawTexture(id, face) {
       break;
     }
     case B.BEDROCK: fillNoise(ctx, base, 10); specks(ctx, "#000", 20); break;
+    case B.SEAGRASS: {
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      const rng = mulberry(7);
+      // Wavy green blades
+      for (let i = 0; i < 6; i++) {
+        const bx = (rng() * SIZE) | 0;
+        ctx.strokeStyle = i % 2 ? "#3a8a4a" : "#2a6a3a";
+        ctx.lineWidth = 1 + ((rng() * 2) | 0);
+        ctx.beginPath();
+        let yy = SIZE;
+        ctx.moveTo(bx, yy);
+        for (let s = 0; s < 6; s++) {
+          yy -= 2 + (rng() * 2);
+          ctx.lineTo(bx + Math.sin(s + i) * 2, yy);
+        }
+        ctx.stroke();
+      }
+      break;
+    }
+    case B.RAW_FISH: {
+      fillNoise(ctx, base, 12);
+      ctx.strokeStyle = "rgba(120,150,160,0.6)";
+      ctx.beginPath();
+      ctx.moveTo(2, 8); ctx.bezierCurveTo(5, 4, 11, 4, 13, 8);
+      ctx.bezierCurveTo(11, 12, 5, 12, 2, 8); ctx.stroke();
+      ctx.fillStyle = "#3a4a5a";
+      ctx.fillRect(13, 6, 2, 4); // tail
+      ctx.fillStyle = "#1a2a3a";
+      ctx.fillRect(4, 7, 1, 1); // eye
+      break;
+    }
+    case B.COOKED_FISH: {
+      fillNoise(ctx, base, 14);
+      ctx.strokeStyle = "rgba(140,90,40,0.6)";
+      ctx.beginPath();
+      ctx.moveTo(2, 8); ctx.bezierCurveTo(5, 4, 11, 4, 13, 8);
+      ctx.bezierCurveTo(11, 12, 5, 12, 2, 8); ctx.stroke();
+      ctx.fillStyle = "#7a4a1a";
+      ctx.fillRect(13, 6, 2, 4);
+      ctx.fillStyle = "#2a1a08";
+      ctx.fillRect(4, 7, 1, 1);
+      break;
+    }
     case B.RAW_BEEF: {
       fillNoise(ctx, base, 22);
       specks(ctx, "#f0c0c0", 10); // fat
@@ -54394,6 +54441,13 @@ function generateChunk(cx, cz, noise) {
         for (let y = surface + 1; y <= W.seaLevel; y++) {
           chunk.blocks[chunk.idx(x, y, z)] = B.WATER;
         }
+        // Seagrass on the seabed if it's not too deep (≤ 4 blocks of water).
+        if (W.seaLevel - surface <= 4 &&
+            (chunk.blocks[chunk.idx(x, surface, z)] === B.SAND ||
+             chunk.blocks[chunk.idx(x, surface, z)] === B.DIRT) &&
+            noise.hash(wx, 29, wz) < 0.08) {
+          chunk.blocks[chunk.idx(x, surface + 1, z)] = B.SEAGRASS;
+        }
       }
       // Trees on grass, above sea, not at chunk border so we don't straddle.
       if (chunk.blocks[chunk.idx(x, surface, z)] === B.GRASS &&
@@ -54463,6 +54517,35 @@ function disposeMesh(m) {
   if (m.geometry) m.geometry.dispose();
 }
 
+// Crossed quads that span the cell — used for seagrass. `w` is half-width
+// in x/z, `h` is height in y.
+function addCross(layer, x, y, z, id, w, h) {
+  const cx = x + 0.5, cz = z + 0.5;
+  const baseY = y, topY = y + h;
+  const [u0, v0, u1, v1] = atlasUV(id, 2);
+  const pts = [
+    [
+      [cx - w, baseY, cz - w],
+      [cx - w, topY,  cz - w],
+      [cx + w, topY,  cz + w],
+      [cx + w, baseY, cz + w],
+    ],
+    [
+      [cx + w, baseY, cz - w],
+      [cx + w, topY,  cz - w],
+      [cx - w, topY,  cz + w],
+      [cx - w, baseY, cz + w],
+    ],
+  ];
+  for (const quadPts of pts) {
+    const vIdx = layer.positions.length / 3;
+    for (const p of quadPts) layer.positions.push(p[0], p[1], p[2]);
+    for (let i = 0; i < 4; i++) layer.normals.push(0, 0, 1);
+    layer.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
+    layer.indices.push(vIdx, vIdx + 1, vIdx + 2, vIdx, vIdx + 2, vIdx + 3);
+  }
+}
+
 // Adds a torch as two crossed quads centered in the cell, smaller than full block.
 function addTorch(layer, x, y, z, id) {
   const cx = x + 0.5, cz = z + 0.5;
@@ -54516,9 +54599,13 @@ function buildChunkMesh(chunk, world) {
         const isTransparent = !!def?.transparent;
         const isLiquid = !!def?.liquid;
 
-        // Decor: torches render as crossed quads instead of a full cube.
+        // Decor: torches and seagrass render as crossed quads.
         if (id === B.TORCH) {
           addTorch(transparent, x, y, z, id);
+          continue;
+        }
+        if (id === B.SEAGRASS) {
+          addCross(transparent, x, y, z, id, 0.45, 1.0);
           continue;
         }
 
@@ -55187,6 +55274,7 @@ const RECIPES = [
   { out: [B.DIAMOND_BLOCK, 1], in: [{ id: B.DIAMOND_ORE, count: 9 }], name: "Diamond Block" },
   { out: [B.PLATINUM_BLOCK, 1], in: [{ id: B.PLATINUM_ORE, count: 9 }], name: "Platinum Block" },
   { out: [B.COOKED_BEEF, 1], in: [{ id: B.RAW_BEEF, count: 1 }], name: "Cook Raw Beef (needs fireplace)", needsFire: true },
+  { out: [B.COOKED_FISH, 1], in: [{ id: B.RAW_FISH, count: 1 }], name: "Cook Raw Fish (needs fireplace)", needsFire: true },
   { out: [B.PICKAXE_WOOD, 1],     in: [{ id: B.PLANKS, count: 3 }, { id: B.BEAM, count: 1 }],            name: "Wood Pickaxe (mines stone)" },
   { out: [B.PICKAXE_STONE, 1],    in: [{ id: B.COBBLE, count: 3 }, { id: B.BEAM, count: 1 }],            name: "Stone Pickaxe (mines iron, gold)" },
   { out: [B.PICKAXE_IRON, 1],     in: [{ id: B.IRON_BLOCK, count: 1 }, { id: B.BEAM, count: 1 }],        name: "Iron Pickaxe (mines diamond)" },
@@ -55517,9 +55605,121 @@ class Cow {
   window.Cow = typeof Cow !== 'undefined' ? Cow : undefined;
 })();
 
+// === js/entities/fish.js ===
+(function () {
+// Fish: small aquatic mob that swims in water. Drops RAW_FISH when killed.
+function box(w, h, d, color) {
+  const g = new THREE.BoxGeometry(w, h, d);
+  const m = new THREE.MeshLambertMaterial({ color });
+  return new THREE.Mesh(g, m);
+}
+
+class Fish {
+  constructor(pos, scene, world) {
+    this.world = world;
+    this.scene = scene;
+    this.pos = pos.clone();
+    this.vel = new THREE.Vector3();
+    this.yaw = Math.random() * Math.PI * 2;
+    this.health = 4;
+    this.state = "swim";
+    this.stateT = 1 + Math.random() * 3;
+    this.width = 0.4;
+    this.height = 0.3;
+    this.alive = true;
+    this.deathT = 0;
+    this.isFish = true; // tag for drop logic
+
+    this.group = new THREE.Group();
+    const body = 0x3a78a8, belly = 0xc8d8e0;
+    const b = box(0.55, 0.28, 0.18, body);
+    b.position.y = 0.14; this.group.add(b);
+    const bel = box(0.5, 0.12, 0.16, belly);
+    bel.position.y = 0.08; this.group.add(bel);
+    const tail = box(0.08, 0.18, 0.04, body);
+    tail.position.set(-0.32, 0.14, 0); this.group.add(tail);
+    this.tail = tail;
+    const eye = box(0.04, 0.04, 0.04, 0x111111);
+    eye.position.set(0.22, 0.22, 0.09); this.group.add(eye);
+
+    this.group.position.copy(this.pos);
+    scene.add(this.group);
+  }
+
+  hit(dmg) {
+    if (!this.alive) return;
+    this.health -= dmg;
+    if (this.health <= 0) { this.alive = false; this.deathT = 0.8; }
+  }
+
+  update(dt) {
+    if (!this.alive) {
+      this.deathT -= dt;
+      this.group.rotation.z = Math.min(Math.PI / 2, this.group.rotation.z + dt * 4);
+      this.group.position.y -= dt * 0.3;
+      return this.deathT > 0;
+    }
+    this.stateT -= dt;
+    if (this.stateT <= 0) {
+      const r = Math.random();
+      this.yaw = Math.random() * Math.PI * 2;
+      this.state = r < 0.3 ? "idle" : "swim";
+      this.stateT = 1.5 + Math.random() * 3;
+    }
+    const speed = this.state === "swim" ? 1.6 : 0.0;
+    const dir = new THREE.Vector3(Math.cos(this.yaw), 0, Math.sin(this.yaw));
+    this.vel.x = dir.x * speed;
+    this.vel.z = dir.z * speed;
+
+    // Gentle vertical bob — fish tries to stay submerged.
+    const headBlock = this.world.getBlock(
+      Math.floor(this.pos.x), Math.floor(this.pos.y + 0.3), Math.floor(this.pos.z)
+    );
+    if (!isLiquid(headBlock)) this.vel.y -= 6 * dt;          // sink if out of water
+    else this.vel.y += (Math.sin(performance.now() * 0.003) * 0.4 - this.vel.y) * 0.05;
+
+    const nx = this.pos.x + this.vel.x * dt;
+    const ny = this.pos.y + this.vel.y * dt;
+    const nz = this.pos.z + this.vel.z * dt;
+    // Simple solid-block collision.
+    if (!isSolid(this.world.getBlock(Math.floor(nx), Math.floor(this.pos.y), Math.floor(this.pos.z)))) {
+      this.pos.x = nx;
+    } else { this.yaw = -this.yaw; }
+    if (!isSolid(this.world.getBlock(Math.floor(this.pos.x), Math.floor(ny), Math.floor(this.pos.z)))) {
+      this.pos.y = ny;
+    }
+    if (!isSolid(this.world.getBlock(Math.floor(this.pos.x), Math.floor(this.pos.y), Math.floor(nz)))) {
+      this.pos.z = nz;
+    } else { this.yaw = -this.yaw; }
+
+    // Fish out of water for too long despawns.
+    if (this.pos.y < -5) return false;
+    if (!isLiquid(this.world.getBlock(Math.floor(this.pos.x), Math.floor(this.pos.y + 0.1), Math.floor(this.pos.z)))) {
+      this._airTime = (this._airTime || 0) + dt;
+      if (this._airTime > 6) return false;
+    } else this._airTime = 0;
+
+    this.group.position.copy(this.pos);
+    this.group.rotation.y = -this.yaw + Math.PI / 2;
+    if (this.tail) this.tail.rotation.y = Math.sin(performance.now() * 0.012) * 0.4;
+    return true;
+  }
+
+  remove() {
+    this.scene.remove(this.group);
+    this.group.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) o.material.dispose();
+    });
+  }
+}
+
+  window.Fish = typeof Fish !== 'undefined' ? Fish : undefined;
+})();
+
 // === js/gameplay/mobs.js ===
 (function () {
-// Mob system: spawns/despawns cows around the player and updates them.
+// Mob system: spawns/despawns cows on land + fish in water and updates them.
 class MobSystem {
   constructor(world, scene) {
     this.world = world;
@@ -55527,9 +55727,9 @@ class MobSystem {
     this.mobs = [];
     this.targetCount = 8;
     this.spawnTimer = 0;
+    this._aiAcc = 0;             // throttle AI updates for perf
   }
   _findSpawn(playerPos) {
-    // Pick a random surface block within 8–24 blocks of the player.
     for (let attempt = 0; attempt < 8; attempt++) {
       const ang = Math.random() * Math.PI * 2;
       const r = 8 + Math.random() * 16;
@@ -55537,7 +55737,6 @@ class MobSystem {
       const z = Math.floor(playerPos.z + Math.sin(ang) * r);
       const y = this.world.surfaceHeight(x, z);
       if (y > 0 && y < 60) {
-        // Make sure spawn is on solid ground and air above.
         if (isSolid(this.world.getBlock(x, y, z)) &&
             this.world.getBlock(x, y + 1, z) === B.AIR &&
             this.world.getBlock(x, y + 2, z) === B.AIR) {
@@ -55547,36 +55746,68 @@ class MobSystem {
     }
     return null;
   }
+  _findWaterSpawn(playerPos) {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const ang = Math.random() * Math.PI * 2;
+      const r = 6 + Math.random() * 18;
+      const x = Math.floor(playerPos.x + Math.cos(ang) * r);
+      const z = Math.floor(playerPos.z + Math.sin(ang) * r);
+      // Scan downward from sea level for a water column with room.
+      for (let y = 22; y > 2; y--) {
+        if (isLiquid(this.world.getBlock(x, y, z)) &&
+            this.world.getBlock(x, y + 1, z) === B.WATER &&
+            this.world.getBlock(x, y - 1, z) !== B.AIR) {
+          return new THREE.Vector3(x + 0.5, y, z + 0.5);
+        }
+      }
+    }
+    return null;
+  }
   update(dt, playerPos) {
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0 && this.mobs.length < this.targetCount) {
       this.spawnTimer = 2 + Math.random() * 3;
-      const spawn = this._findSpawn(playerPos);
-      if (spawn) this.mobs.push(new Cow(spawn, this.scene, this.world));
+      // Try both spawn paths; bias by whether player is near water.
+      const wantsFish = Math.random() < 0.4;
+      if (wantsFish) {
+        const s = this._findWaterSpawn(playerPos);
+        if (s) this.mobs.push(new Fish(s, this.scene, this.world));
+        else {
+          const s2 = this._findSpawn(playerPos);
+          if (s2) this.mobs.push(new Cow(s2, this.scene, this.world));
+        }
+      } else {
+        const s = this._findSpawn(playerPos);
+        if (s) this.mobs.push(new Cow(s, this.scene, this.world));
+      }
     }
-    // Update + cull
+    // Throttle AI: only step physics every ~100ms. dt between is skipped.
+    // Movement still looks smooth because mob speeds are slow.
+    this._aiAcc += dt;
+    const step = this._aiAcc >= 0.1;
+    if (step) this._aiAcc = 0;
     const keep = [];
     for (const m of this.mobs) {
-      const alive = m.update(dt);
+      const alive = step ? m.update(Math.min(dt, 0.1)) : (m.alive || m.deathT > 0);
       const tooFar = m.pos.distanceTo(playerPos) > 80;
       if (alive && !tooFar) keep.push(m);
       else m.remove();
     }
     this.mobs = keep;
   }
-  // Returns the closest cow hit by a ray from origin/dir within maxDist, or null.
   raycast(origin, dir, maxDist) {
     let best = null, bestDist = maxDist;
     for (const m of this.mobs) {
       if (!m.alive) continue;
       const center = m.pos.clone();
-      center.y += m.height / 2;
+      center.y += (m.height || 0.7) / 2;
       const toC = center.clone().sub(origin);
       const proj = toC.dot(dir);
       if (proj < 0 || proj > maxDist) continue;
       const closestPt = origin.clone().add(dir.clone().multiplyScalar(proj));
       const d = closestPt.distanceTo(center);
-      if (d < 0.7 && proj < bestDist) {
+      const radius = m.isFish ? 0.5 : 0.7;
+      if (d < radius && proj < bestDist) {
         best = m;
         bestDist = proj;
       }
@@ -55584,6 +55815,7 @@ class MobSystem {
     return best;
   }
 }
+
 
   window.MobSystem = typeof MobSystem !== 'undefined' ? MobSystem : undefined;
 })();
@@ -55968,10 +56200,14 @@ async function main() {
     const cow = mobs.raycast(origin, dir, CONFIG.mining.range + 1);
     if (cow) {
       const wasAlive = cow.alive;
-      cow.hit(4, player.pos);
+      cow.hit(cow.isFish ? 4 : 4, player.pos);
       if (wasAlive && !cow.alive) {
-        const drop = 2 + (Math.random() * 2 | 0);
-        inv.add(B.RAW_BEEF, drop);
+        if (cow.isFish) {
+          inv.add(B.RAW_FISH, 1);
+        } else {
+          const drop = 2 + (Math.random() * 2 | 0);
+          inv.add(B.RAW_BEEF, drop);
+        }
         hud.refresh();
       }
     }
