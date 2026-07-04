@@ -122,7 +122,7 @@ label { display: inline-block; }
   </div>
   <div id="target-info" class="hidden"></div>
 </div>
-<div id="version-tag">0.15.1</div>
+<div id="version-tag">0.15.2</div>
 <div id="craft-panel" class="hidden">
   <h2>Crafting</h2>
   <div id="recipe-list"></div>
@@ -54795,8 +54795,34 @@ class Player {
   }
 
   spawn() {
-    const h = this.world.surfaceHeight(8, 8);
-    this.pos.set(8.5, h + 2, 8.5);
+    // Search outward in expanding rings for a column above sea level so we
+    // never spawn marooned in an endless ocean.
+    const sea = CONFIG.world.seaLevel;
+    const start = new THREE.Vector3(8.5, 40, 8.5);
+    const tryAt = (sx, sz) => {
+      const cx = Math.floor(sx / CONFIG.world.chunkSize), cz = Math.floor(sz / CONFIG.world.chunkSize);
+      this.world.ensureChunk(cx, cz);
+      const h = this.world.surfaceHeight(sx, sz);
+      return h > sea + 1 ? h : -1;
+    };
+    for (let r = 0; r <= 96; r += 4) {
+      const steps = Math.max(8, r * 6);
+      for (let i = 0; i < steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        const sx = 8 + Math.round(Math.cos(a) * r);
+        const sz = 8 + Math.round(Math.sin(a) * r);
+        const h = tryAt(sx, sz);
+        if (h > 0) { start.set(sx + 0.5, h + 2, sz + 0.5); return this._applySpawn(start); }
+      }
+    }
+    // Fallback: spawn at origin even if it's underwater.
+    const h0 = tryAt(8, 8);
+    start.set(8.5, Math.max(h0, sea + 1) + 2, 8.5);
+    return this._applySpawn(start);
+  }
+  _applySpawn(v) {
+    this.pos.copy(v);
+    this.vel.set(0, 0, 0);
   }
 
   look(dx, dy) {
