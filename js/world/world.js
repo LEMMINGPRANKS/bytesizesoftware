@@ -58,13 +58,23 @@ export class World {
   update(px, pz) {
     const pcx = Math.floor(px / CHUNK_SIZE), pcz = Math.floor(pz / CHUNK_SIZE);
     const R = CONFIG.world.renderDistance;
-    // Ensure chunks exist
-    for (let dx = -R; dx <= R; dx++)
-      for (let dz = -R; dz <= R; dz++) {
-        this.ensureChunk(pcx + dx, pcz + dz);
+    // Ensure chunks exist — but cap generation to 1 per frame to avoid FPS spikes.
+    // Priority: closest first.
+    let genBudget = 1;
+    for (let radius = 0; radius <= R && genBudget > 0; radius++) {
+      for (let dx = -radius; dx <= radius && genBudget > 0; dx++) {
+        for (let dz = -radius; dz <= radius && genBudget > 0; dz++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== radius) continue;
+          const k = this.key(pcx + dx, pcz + dz);
+          if (!this.chunks.has(k)) {
+            this.ensureChunk(pcx + dx, pcz + dz);
+            genBudget--;
+          }
+        }
       }
+    }
     // Build dirty chunk meshes (limit per frame to avoid hitches).
-    let budget = 3;
+    let budget = 2;
     for (let dx = -R; dx <= R && budget > 0; dx++) {
       for (let dz = -R; dz <= R && budget > 0; dz++) {
         const c = this.getChunk(pcx + dx, pcz + dz);
