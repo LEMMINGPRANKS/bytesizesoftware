@@ -21,7 +21,7 @@ export const CONFIG = {
   },
   mining: {
     range: 5,
-    baseTime: 0.32,       // seconds per block hardness unit
+    baseTime: 0.55,       // seconds per block hardness unit
   },
   ores: {
     iron:    { minDepth: 4,  threshold: 0.82, color: "#caa472" },
