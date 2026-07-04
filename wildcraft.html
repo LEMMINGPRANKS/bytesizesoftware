@@ -137,7 +137,7 @@ label { display: inline-block; }
   </div>
   <div id="target-info" class="hidden"></div>
 </div>
-<div id="version-tag">release-window-17.1</div>
+<div id="version-tag">release-window-17.2</div>
 <div id="craft-panel" class="hidden">
   <h2>Crafting</h2>
   <div id="recipe-list"></div>
@@ -54641,6 +54641,9 @@ function buildChunkMesh(chunk, world) {
             if (isLiquid) continue;
           } else if (BLOCKS[neighbour]?.transparent) {
             if (neighbour === id) continue;
+            // Waterlog: water surface shouldn't render against seagrass —
+            // seagrass is treated as waterlogged so the cells visually merge.
+            if (isLiquid && neighbour === B.SEAGRASS) continue;
           } else {
             continue;
           }

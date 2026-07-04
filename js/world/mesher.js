@@ -160,6 +160,9 @@ export function buildChunkMesh(chunk, world) {
             if (isLiquid) continue;
           } else if (BLOCKS[neighbour]?.transparent) {
             if (neighbour === id) continue;
+            // Waterlog: water surface shouldn't render against seagrass —
+            // seagrass is treated as waterlogged so the cells visually merge.
+            if (isLiquid && neighbour === B.SEAGRASS) continue;
           } else {
             continue;
           }
