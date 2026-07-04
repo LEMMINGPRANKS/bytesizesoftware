@@ -14,6 +14,7 @@ import { canCraft, craft } from "./gameplay/crafting.js";
 import { TreeSystem } from "./gameplay/trees.js";
 import { MobSystem } from "./gameplay/mobs.js";
 import { B, BLOCKS, isSolid, isLiquid } from "./world/blocks.js";
+import { atlasUV } from "./world/textures.js";
 
 const $ = (s) => document.querySelector(s);
 
@@ -46,6 +47,12 @@ async function main() {
   inv.add(B.PLANKS, 8);
 
   setStatus("Generating world…");
+  // Pre-warm the texture atlas so chunk meshing never triggers a re-upload mid-game.
+  for (const idStr of Object.keys(BLOCKS)) {
+    const id = Number(idStr);
+    if (id === B.AIR || id === B.WATER) continue;
+    for (let f = 0; f < 6; f++) atlasUV(id, f);
+  }
   // Pre-generate chunks around spawn so player spawns on solid ground.
   for (let dx = -1; dx <= 1; dx++)
     for (let dz = -1; dz <= 1; dz++)
