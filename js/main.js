@@ -17,6 +17,7 @@ import { B, BLOCKS, isSolid, isLiquid } from "./world/blocks.js";
 import { atlasUV } from "./world/textures.js";
 import {
   listSlots, loadSlot, saveSlot, deleteSlot, MAX_SLOTS,
+  exportSlot, importToSlot, exportFilename,
 } from "./save/saveManager.js";
 import { getSettings, saveSettings, applySettings, DEFAULTS } from "./save/settings.js";
 
@@ -212,6 +213,9 @@ async function main() {
         const play = document.createElement("button");
         play.textContent = "Play";
         play.onclick = () => startGame(i);
+        const exp = document.createElement("button");
+        exp.textContent = "Export";
+        exp.onclick = () => doExport(i);
         const del = document.createElement("button");
         del.textContent = "Delete";
         del.className = "danger";
@@ -223,7 +227,7 @@ async function main() {
         };
         const btns = document.createElement("div");
         btns.className = "world-btns";
-        btns.append(play, del);
+        btns.append(play, exp, del);
         row.append(btns);
       } else {
         row.classList.add("empty");
@@ -231,13 +235,50 @@ async function main() {
         const create = document.createElement("button");
         create.textContent = "Create";
         create.onclick = () => openNewWorldForm(i);
+        const imp = document.createElement("button");
+        imp.textContent = "Import";
+        imp.onclick = () => doImport(i);
         const btns = document.createElement("div");
         btns.className = "world-btns";
-        btns.append(create);
+        btns.append(create, imp);
         row.append(btns);
       }
       worldList.append(row);
     }
+  }
+
+  // ---- Export / Import handlers ----
+  function doExport(slot) {
+    const text = exportSlot(slot);
+    if (!text) return;
+    const meta = listSlots()[slot];
+    const blob = new Blob([text], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = exportFilename(meta?.name, slot);
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+  }
+  function doImport(slot) {
+    const inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = ".json,application/json";
+    inp.onchange = () => {
+      const f = inp.files?.[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const res = importToSlot(slot, String(reader.result));
+        if (res === true) {
+          renderWorldList();
+        } else {
+          alert("Import failed: " + res);
+        }
+      };
+      reader.readAsText(f);
+    };
+    inp.click();
   }
 
   function escapeHtml(s) {

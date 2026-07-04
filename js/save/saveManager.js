@@ -47,3 +47,47 @@ export function saveSlot(slot, data) {
 export function deleteSlot(slot) {
   localStorage.removeItem(KEY(slot));
 }
+
+// ---- Export / Import (single-file portability across browsers) ----
+// Versioned so future migrations can transform old shapes into new ones.
+
+export const SAVE_VERSION = 1;
+
+// Build a portable export blob for a slot.
+export function exportSlot(slot) {
+  const data = loadSlot(slot);
+  if (!data) return null;
+  return JSON.stringify({ ...data, version: data.version || SAVE_VERSION }, null, 2);
+}
+
+// Sanitise + persist an imported blob into the given slot.
+// Returns true on success, or an error string on failure.
+export function importToSlot(slot, text) {
+  let data;
+  try { data = JSON.parse(text); }
+  catch { return "File is not valid JSON."; }
+  if (typeof data !== "object" || data === null) return "File is empty or malformed.";
+  if (typeof data.seed !== "number") return "Missing world seed — not a Wildcraft save?";
+  if (!data.modified || typeof data.modified !== "object") data.modified = {};
+  // Force the slot index onto the data so it lands where the user dropped it.
+  data.version = data.version || SAVE_VERSION;
+  data.timestamp = Date.now();
+  data.name = (data.name && String(data.name).trim()) || `Imported World ${slot + 1}`;
+  // Future: if (data.version < CURRENT_VERSION) data = migrate(data);
+  try {
+    localStorage.setItem(KEY(slot), JSON.stringify(data));
+    return true;
+  } catch (e) {
+    return "Storage write failed: " + e.message;
+  }
+}
+
+// Suggest a safe filename for a world.
+export function exportFilename(name, slot) {
+  const safe = String(name || `world-${slot + 1}`)
+    .replace(/[^a-zA-Z0-9-_]+/g, "_")
+    .replace(/_+/g, "_")
+    .slice(0, 40)
+    .replace(/^_|_$/g, "") || "world";
+  return `wildcraft-${safe}.json`;
+}
