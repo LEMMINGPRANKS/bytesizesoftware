@@ -25,7 +25,11 @@ export function generateChunk(cx, cz, noise) {
       const mtnNoise = noise.height(wx * 0.005 + 100, wz * 0.005 - 50, 3);
       const mtnMask = Math.max(0, mtnNoise - 0.55) / 0.45;  // 0..1, only on peaks
       const mtn = mtnMask * mtnMask;                          // sharpen ridges
-      const h = Math.floor(W.baseHeight + hill * W.hillHeight + mtn * W.mountainHeight);
+      // Continent mask: very low-frequency noise that dips big regions below
+      // sea level → larger oceans. Squared so the ocean floor is flat.
+      const cont = noise.height(wx * 0.0018 + 999, wz * 0.0018 - 999, 2);
+      const dip = cont < 0.5 ? (0.5 - cont) * (0.5 - cont) * 60 : 0;
+      const h = Math.floor(W.baseHeight + hill * W.hillHeight + mtn * W.mountainHeight - dip);
       const surface = Math.max(1, Math.min(CHUNK_HEIGHT - 6, h));
 
       for (let y = 0; y <= surface; y++) {
