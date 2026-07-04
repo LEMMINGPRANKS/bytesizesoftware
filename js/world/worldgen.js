@@ -20,9 +20,12 @@ export function generateChunk(cx, cz, noise) {
   for (let x = 0; x < CHUNK_SIZE; x++) {
     for (let z = 0; z < CHUNK_SIZE; z++) {
       const wx = baseX + x, wz = baseZ + z;
-      const h = Math.floor(
-        W.baseHeight + (noise.height(wx * 0.012, wz * 0.012, 5) - 0.5) * 2 * W.hillHeight
-      );
+      // Layered height: gentle hills + occasional dramatic mountains.
+      const hill = (noise.height(wx * 0.012, wz * 0.012, 5) - 0.5) * 2;
+      const mtnNoise = noise.height(wx * 0.005 + 100, wz * 0.005 - 50, 3);
+      const mtnMask = Math.max(0, mtnNoise - 0.55) / 0.45;  // 0..1, only on peaks
+      const mtn = mtnMask * mtnMask;                          // sharpen ridges
+      const h = Math.floor(W.baseHeight + hill * W.hillHeight + mtn * W.mountainHeight);
       const surface = Math.max(1, Math.min(CHUNK_HEIGHT - 6, h));
 
       for (let y = 0; y <= surface; y++) {

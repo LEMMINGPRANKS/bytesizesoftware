@@ -53,7 +53,8 @@ export class HUD {
       } else {
         const tex = getTexture(id, "side");
         s.el.style.backgroundImage = `url(${tex.image.toDataURL?.() || tex.image.src})`;
-        s.count.textContent = this.inv.count(id);
+        const c = this.inv.count(id);
+        s.count.textContent = c === Infinity ? "∞" : c;
       }
       s.el.classList.toggle("active", i === this.inv.active);
     }

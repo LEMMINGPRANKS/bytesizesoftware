@@ -42,6 +42,7 @@ async function main() {
   let hunger = 20;            // 0..20
   let lastHungerTick = performance.now();
   let attackCooldown = 0;
+  let creativeMode = false;
 
   // Starter inventory: a few planks to bootstrap.
   inv.add(B.PLANKS, 8);
@@ -165,11 +166,36 @@ async function main() {
   resumeOverlay.addEventListener("click", () => input.requestLock());
 
   $("#start-btn").addEventListener("click", () => {
+    const mode = document.querySelector('input[name="mode"]:checked')?.value || "survival";
+    applyMode(mode);
     startScreen.classList.add("hidden");
     hud.show(true);
     gameStarted = true;
     input.requestLock();
   });
+
+  function applyMode(mode) {
+    if (mode === "creative") {
+      creativeMode = true;
+      player.fly = true;
+      player.fly = true;
+      // Give every placeable block in the hotbar.
+      const placeable = Object.keys(BLOCKS)
+        .map(Number)
+        .filter((id) => id !== B.AIR && !BLOCKS[id]?.item && id !== B.WATER && id !== B.BEDROCK);
+      // Fill hotbar slots with a useful subset (max 9).
+      const palette = [
+        B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.PLANKS, B.WALL_STONE, B.BRICK, B.GLASS, B.TORCH,
+      ];
+      for (let i = 0; i < palette.length && i < 9; i++) {
+        inv.hotbar[i] = palette[i];
+        inv.items[palette[i]] = Infinity;
+      }
+      hunger = 20;
+      hud.setHunger(hunger);
+      hud.refresh();
+    }
+  }
   $("#craft-close").addEventListener("click", () => {
     craftPanel.classList.add("hidden");
     craftOpen = false;
@@ -256,13 +282,12 @@ async function main() {
 
     // Hunger tick
     const nowMs = performance.now();
-    if (nowMs - lastHungerTick > 6000) {       // every 6s
+    if (!creativeMode && nowMs - lastHungerTick > 6000) {       // every 6s
       lastHungerTick = nowMs;
       hunger = Math.max(0, hunger - 0.5);
       hud.setHunger(hunger);
       if (hunger <= 0) {
-        // Starving: nudge the player upward less jump and slow them.
-        // Light penalty only — no death for now.
+        // Starving: light penalty only — no death for now.
       }
     }
     if (input.mouseJust[0] && target && !BLOCKS[world.getBlock(target.x, target.y, target.z)]?.treeHealth) {

@@ -2,11 +2,12 @@
 export const CONFIG = {
   world: {
     chunkSize: 16,        // x/z size of a chunk in blocks
-    chunkHeight: 64,      // y size
+    chunkHeight: 80,      // y size
     renderDistance: 3,    // chunks in each direction from player
-    seaLevel: 12,
-    baseHeight: 18,
-    hillHeight: 22,
+    seaLevel: 14,
+    baseHeight: 22,
+    hillHeight: 20,
+    mountainHeight: 45,   // peaks when mountain noise is high
   },
   player: {
     eyeHeight: 1.6,

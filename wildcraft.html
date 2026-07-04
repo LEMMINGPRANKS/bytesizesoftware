@@ -80,6 +80,10 @@ p { text-shadow: 1px 1px 2px #000; }
   <p>Click to play. WASD move, Space jump, Mouse look.</p>
   <p>Left click: mine/attack · Right click or Q: place/eat · 1-9: hotbar · E: craft</p>
   <p>Cook raw beef near a fireplace. Watch your hunger bar!</p>
+  <div id="mode-picker" style="display:flex;gap:20px;font-size:18px;">
+    <label><input type="radio" name="mode" value="survival" checked> Survival</label>
+    <label><input type="radio" name="mode" value="creative"> Creative (fly + infinite blocks)</label>
+  </div>
   <button id="start-btn" onclick="window.__playClicked=true; document.getElementById('boot-status').textContent='Play clicked — initializing…';">Play</button>
   <div id="boot-status">Loading…</div>
 </div>
@@ -53574,11 +53578,12 @@ if ( typeof window !== 'undefined' ) {
 const CONFIG = {
   world: {
     chunkSize: 16,        // x/z size of a chunk in blocks
-    chunkHeight: 64,      // y size
+    chunkHeight: 80,      // y size
     renderDistance: 3,    // chunks in each direction from player
-    seaLevel: 12,
-    baseHeight: 18,
-    hillHeight: 22,
+    seaLevel: 14,
+    baseHeight: 22,
+    hillHeight: 20,
+    mountainHeight: 45,   // peaks when mountain noise is high
   },
   player: {
     eyeHeight: 1.6,
@@ -54137,9 +54142,12 @@ function generateChunk(cx, cz, noise) {
   for (let x = 0; x < CHUNK_SIZE; x++) {
     for (let z = 0; z < CHUNK_SIZE; z++) {
       const wx = baseX + x, wz = baseZ + z;
-      const h = Math.floor(
-        W.baseHeight + (noise.height(wx * 0.012, wz * 0.012, 5) - 0.5) * 2 * W.hillHeight
-      );
+      // Layered height: gentle hills + occasional dramatic mountains.
+      const hill = (noise.height(wx * 0.012, wz * 0.012, 5) - 0.5) * 2;
+      const mtnNoise = noise.height(wx * 0.005 + 100, wz * 0.005 - 50, 3);
+      const mtnMask = Math.max(0, mtnNoise - 0.55) / 0.45;  // 0..1, only on peaks
+      const mtn = mtnMask * mtnMask;                          // sharpen ridges
+      const h = Math.floor(W.baseHeight + hill * W.hillHeight + mtn * W.mountainHeight);
       const surface = Math.max(1, Math.min(CHUNK_HEIGHT - 6, h));
 
       for (let y = 0; y <= surface; y++) {
@@ -55233,7 +55241,8 @@ class HUD {
       } else {
         const tex = getTexture(id, "side");
         s.el.style.backgroundImage = `url(${tex.image.toDataURL?.() || tex.image.src})`;
-        s.count.textContent = this.inv.count(id);
+        const c = this.inv.count(id);
+        s.count.textContent = c === Infinity ? "∞" : c;
       }
       s.el.classList.toggle("active", i === this.inv.active);
     }
@@ -55281,6 +55290,7 @@ async function main() {
   let hunger = 20;            // 0..20
   let lastHungerTick = performance.now();
   let attackCooldown = 0;
+  let creativeMode = false;
 
   // Starter inventory: a few planks to bootstrap.
   inv.add(B.PLANKS, 8);
@@ -55404,11 +55414,36 @@ async function main() {
   resumeOverlay.addEventListener("click", () => input.requestLock());
 
   $("#start-btn").addEventListener("click", () => {
+    const mode = document.querySelector('input[name="mode"]:checked')?.value || "survival";
+    applyMode(mode);
     startScreen.classList.add("hidden");
     hud.show(true);
     gameStarted = true;
     input.requestLock();
   });
+
+  function applyMode(mode) {
+    if (mode === "creative") {
+      creativeMode = true;
+      player.fly = true;
+      player.fly = true;
+      // Give every placeable block in the hotbar.
+      const placeable = Object.keys(BLOCKS)
+        .map(Number)
+        .filter((id) => id !== B.AIR && !BLOCKS[id]?.item && id !== B.WATER && id !== B.BEDROCK);
+      // Fill hotbar slots with a useful subset (max 9).
+      const palette = [
+        B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.PLANKS, B.WALL_STONE, B.BRICK, B.GLASS, B.TORCH,
+      ];
+      for (let i = 0; i < palette.length && i < 9; i++) {
+        inv.hotbar[i] = palette[i];
+        inv.items[palette[i]] = Infinity;
+      }
+      hunger = 20;
+      hud.setHunger(hunger);
+      hud.refresh();
+    }
+  }
   $("#craft-close").addEventListener("click", () => {
     craftPanel.classList.add("hidden");
     craftOpen = false;
@@ -55495,13 +55530,12 @@ async function main() {
 
     // Hunger tick
     const nowMs = performance.now();
-    if (nowMs - lastHungerTick > 6000) {       // every 6s
+    if (!creativeMode && nowMs - lastHungerTick > 6000) {       // every 6s
       lastHungerTick = nowMs;
       hunger = Math.max(0, hunger - 0.5);
       hud.setHunger(hunger);
       if (hunger <= 0) {
-        // Starving: nudge the player upward less jump and slow them.
-        // Light penalty only — no death for now.
+        // Starving: light penalty only — no death for now.
       }
     }
     if (input.mouseJust[0] && target && !BLOCKS[world.getBlock(target.x, target.y, target.z)]?.treeHealth) {
