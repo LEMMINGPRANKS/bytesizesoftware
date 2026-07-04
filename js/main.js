@@ -644,6 +644,23 @@ async function main() {
     buildChestSlots();
     refreshChestPanel();
   }
+  // Scan nearby blocks for a chest and open the closest one. Used so the
+  // player doesn't have to aim precisely at the chest block.
+  function openNearestChest() {
+    const px = Math.floor(player.pos.x), py = Math.floor(player.pos.y + 1), pz = Math.floor(player.pos.z);
+    let best = null, bestD = Infinity;
+    const R = 5;
+    for (let dx = -R; dx <= R; dx++)
+      for (let dy = -2; dy <= 3; dy++)
+        for (let dz = -R; dz <= R; dz++) {
+          if (Math.abs(dx) + Math.abs(dz) > R) continue;
+          const bx = px + dx, by = py + dy, bz = pz + dz;
+          if (world.getBlock(bx, by, bz) !== B.CHEST) continue;
+          const d = dx * dx + dy * dy + dz * dz;
+          if (d < bestD) { bestD = d; best = { x: bx, y: by, z: bz }; }
+        }
+    if (best) openChest(best.x, best.y, best.z);
+  }
   function closeChest() {
     chestOpen = false;
     chestPos = null;
@@ -704,6 +721,7 @@ async function main() {
       else toggleCraft();
     }
     if (input.justPressed.has("Tab") || input.justPressed.has("KeyI")) toggleInv();
+    if (input.justPressed.has("KeyR") && !chestOpen) openNearestChest();
     if (input.justPressed.has("KeyF")) player.toggleFly();
     if (input.justPressed.has("Escape") && chestOpen) closeChest();
 
