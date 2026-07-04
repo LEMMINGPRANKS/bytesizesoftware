@@ -440,7 +440,7 @@ async function main() {
     mobs.update(dt, player.pos);
 
     const nowMs = performance.now();
-    if (!creativeMode && nowMs - lastHungerTick > 12000) {
+    if (!creativeMode && nowMs - lastHungerTick > 24000) {
       lastHungerTick = nowMs;
       hunger = Math.max(0, hunger - 0.25);
       hud.setHunger(hunger);
