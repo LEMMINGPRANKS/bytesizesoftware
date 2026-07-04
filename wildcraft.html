@@ -92,7 +92,7 @@ label { display: inline-block; }
   </div>
   <div id="target-info" class="hidden"></div>
 </div>
-<div id="version-tag">v0.0.12</div>
+<div id="version-tag">v0.0.13</div>
 <div id="craft-panel" class="hidden">
   <h2>Crafting</h2>
   <div id="recipe-list"></div>
@@ -54250,14 +54250,20 @@ function generateChunk(cx, cz, noise) {
     for (let z = 0; z < CHUNK_SIZE; z++) {
       const wx = baseX + x, wz = baseZ + z;
       // Layered height: gentle hills + occasional dramatic mountains.
-      const hill = (noise.height(wx * 0.012, wz * 0.012, 5) - 0.5) * 2;
+      let hill = (noise.height(wx * 0.012, wz * 0.012, 5) - 0.5) * 2;
       const mtnNoise = noise.height(wx * 0.005 + 100, wz * 0.005 - 50, 3);
       const mtnMask = Math.max(0, mtnNoise - 0.55) / 0.45;  // 0..1, only on peaks
       const mtn = mtnMask * mtnMask;                          // sharpen ridges
-      // Continent mask: very low-frequency noise that dips big regions below
-      // sea level → larger oceans. Squared so the ocean floor is flat.
-      const cont = noise.height(wx * 0.0018 + 999, wz * 0.0018 - 999, 2);
-      const dip = cont < 0.5 ? (0.5 - cont) * (0.5 - cont) * 60 : 0;
+      // Continent mask: very low-frequency noise that decides ocean vs land.
+      // Below the threshold, terrain gets shoved firmly underwater with damp
+      // hills so we get proper seas, not puddles.
+      const cont = noise.height(wx * 0.0015 + 999, wz * 0.0015 - 999, 2);
+      let dip = 0;
+      if (cont < 0.58) {
+        const ocean = (0.58 - cont) / 0.58;          // 0..1, deeper inland of ocean
+        dip = 18 + ocean * ocean * 50;                // 18..68 guaranteed dip
+        hill *= 0.25;                                  // flatten seabed
+      }
       const h = Math.floor(W.baseHeight + hill * W.hillHeight + mtn * W.mountainHeight - dip);
       const surface = Math.max(1, Math.min(CHUNK_HEIGHT - 6, h));
 
