@@ -36,7 +36,13 @@ export function generateChunk(cx, cz, noise) {
       // Continent mask — smooth, continuous. `oceanFactor` runs 0 (deep
       // ocean) → 1 (interior) and is squared for flatter seabeds. No hard
       // cutoff means no cliffs at the coast.
-      const cont = noise.height(sx * 0.0015 + 999, sz * 0.0015 - 999, 2);
+      let cont = noise.height(sx * 0.0015 + 999, sz * 0.0015 - 999, 2);
+      // Pull origin onto land: bias continent up within ~150 blocks of (0,0)
+      // so the player always spawns on solid ground even if the global
+      // continent noise would otherwise put us mid-ocean.
+      const distFromSpawn = Math.hypot(wx, wz);
+      const centerBias = Math.max(0, 1 - distFromSpawn / 150) * 0.45;
+      cont = Math.min(1, cont + centerBias);
       const oceanFactor = Math.max(0, Math.min(1, cont / 0.55)); // 0..1
       const dip = (1 - oceanFactor) * (1 - oceanFactor) * 48;    // 0..48
       hill *= 0.25 + oceanFactor * 0.75;                          // flatten hills underwater

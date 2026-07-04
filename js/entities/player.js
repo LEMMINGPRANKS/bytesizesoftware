@@ -33,7 +33,7 @@ export class Player {
       const h = this.world.surfaceHeight(sx, sz);
       return h > sea + 1 ? h : -1;
     };
-    for (let r = 0; r <= 96; r += 4) {
+    for (let r = 0; r <= 200; r += 4) {
       const steps = Math.max(8, r * 6);
       for (let i = 0; i < steps; i++) {
         const a = (i / steps) * Math.PI * 2;
