@@ -35,11 +35,13 @@ export function generateChunk(cx, cz, noise) {
         else if (y >= surface - 3) id = B.DIRT;
         else id = B.STONE;
 
-        // Ore veins underground.
+        // Ore veins underground. Use value noise above a per-ore threshold so
+        // veins cluster naturally; deeper ores are rarer and deeper-only.
         if (id === B.STONE) {
           for (const [oreId, ore] of ORE_TABLE) {
             const depth = surface - y;
-            if (depth >= ore.minDepth && noise.noise3(wx * 0.06, y * 0.06, wz * 0.06) > (1 - ore.rarity)) {
+            if (depth >= ore.minDepth &&
+                noise.noise3(wx * 0.1 + oreId, y * 0.1, wz * 0.1) > ore.threshold) {
               id = oreId; break;
             }
           }

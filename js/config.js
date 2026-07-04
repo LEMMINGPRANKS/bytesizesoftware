@@ -24,10 +24,10 @@ export const CONFIG = {
     baseTime: 0.32,       // seconds per block hardness unit
   },
   ores: {
-    iron:    { minDepth: 6,  rarity: 0.04, color: "#caa472" },
-    gold:    { minDepth: 14, rarity: 0.012, color: "#ffd700" },
-    diamond: { minDepth: 22, rarity: 0.006, color: "#7afcff" },
-    platinum:{ minDepth: 28, rarity: 0.0035, color: "#e8e8f0" },
+    iron:    { minDepth: 4,  threshold: 0.82, color: "#caa472" },
+    gold:    { minDepth: 12, threshold: 0.90, color: "#ffd700" },
+    diamond: { minDepth: 22, threshold: 0.93, color: "#7afcff" },
+    platinum:{ minDepth: 32, threshold: 0.95, color: "#e8e8f0" },
   },
   tree: {
     minHeight: 4,
