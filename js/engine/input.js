@@ -12,6 +12,8 @@ export class Input {
     window.addEventListener("keydown", (e) => {
       if (!this.keys.has(e.code)) this.justPressed.add(e.code);
       this.keys.add(e.code);
+      // Stop Tab from moving focus away from the canvas.
+      if (e.code === "Tab") e.preventDefault();
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
 

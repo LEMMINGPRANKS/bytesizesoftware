@@ -14,7 +14,7 @@ import { canCraft, craft } from "./gameplay/crafting.js";
 import { TreeSystem } from "./gameplay/trees.js";
 import { MobSystem } from "./gameplay/mobs.js";
 import { B, BLOCKS, isSolid, isLiquid } from "./world/blocks.js";
-import { atlasUV } from "./world/textures.js";
+import { atlasUV, getTexture } from "./world/textures.js";
 import {
   listSlots, loadSlot, saveSlot, deleteSlot, MAX_SLOTS,
   exportSlot, importToSlot, exportFilename,
@@ -78,6 +78,7 @@ async function main() {
           Object.entries(inv.items).map(([k, v]) => [k, v === Infinity ? null : v])
         ),
         hotbar: inv.hotbar,
+        main: inv.main,
         active: inv.active,
       },
       hunger,
@@ -173,11 +174,14 @@ async function main() {
   // ---- World list / start-screen wiring ----
   const startScreen = $("#start-screen");
   const craftPanel = $("#craft-panel");
+  const invPanel = $("#inv-panel");
   const resumeOverlay = $("#resume-overlay");
   const worldList = $("#world-list");
   const newWorldForm = $("#new-world-form");
   let gameStarted = false;
   let craftOpen = false;
+  let invOpen = false;
+  let invCarried = null; // {id} when dragging a stack between slots
   let pendingNewSlot = null;
 
   // Pre-warm the texture atlas up front so it's ready when a world loads.
@@ -350,8 +354,8 @@ async function main() {
     if (saved && saved.inventory) {
       inv.items = saved.inventory.items || {};
       inv.hotbar = saved.inventory.hotbar || inv.hotbar;
+      inv.main = saved.inventory.main || inv.main;
       inv.active = saved.inventory.active || 0;
-      // Convert any serialised Infinity (JSON has no Infinity) back.
       for (const k of Object.keys(inv.items)) if (inv.items[k] === null) inv.items[k] = Infinity;
     } else {
       inv.add(B.PLANKS, 8);
@@ -388,7 +392,7 @@ async function main() {
 
   document.addEventListener("pointerlockchange", () => {
     const locked = document.pointerLockElement === canvas;
-    if (gameStarted && !locked && !craftOpen && startScreen.classList.contains("hidden")) {
+    if (gameStarted && !locked && !craftOpen && !invOpen && startScreen.classList.contains("hidden")) {
       showResume();
     } else if (locked) {
       hideResume();
@@ -462,6 +466,72 @@ async function main() {
     showResume();
   });
 
+  // ---- Inventory panel (Tab) ----
+  const invGrid = $("#inv-grid");
+  const invHotbar = $("#inv-hotbar");
+  function buildInvSlots() {
+    invGrid.innerHTML = "";
+    invHotbar.innerHTML = "";
+    for (let i = 0; i < 9; i++) {
+      const s = document.createElement("div");
+      s.className = "inv-slot hotbar";
+      s.dataset.kind = "hotbar";
+      s.dataset.idx = i;
+      s.addEventListener("click", () => onInvSlotClick("hotbar", i));
+      invHotbar.append(s);
+    }
+    for (let i = 0; i < 27; i++) {
+      const s = document.createElement("div");
+      s.className = "inv-slot";
+      s.dataset.kind = "main";
+      s.dataset.idx = i;
+      s.addEventListener("click", () => onInvSlotClick("main", i));
+      invGrid.append(s);
+    }
+  }
+  function refreshInvPanel() {
+    if (!invOpen) return;
+    const drawSlot = (el, id) => {
+      if (id == null) {
+        el.classList.add("empty");
+        el.style.backgroundImage = "";
+        el.textContent = "";
+      } else {
+        el.classList.remove("empty");
+        const tex = getTexture(id, "side");
+        el.style.backgroundImage = `url(${tex.image.toDataURL?.() || tex.image.src})`;
+        const c = inv.count(id);
+        el.textContent = c === Infinity ? "∞" : (c > 1 ? String(c) : "");
+      }
+    };
+    invHotbar.querySelectorAll(".inv-slot").forEach((el) => {
+      const idx = +el.dataset.idx;
+      drawSlot(el, inv.hotbar[idx]);
+      el.classList.toggle("active", idx === inv.active);
+    });
+    invGrid.querySelectorAll(".inv-slot").forEach((el) => {
+      drawSlot(el, inv.main[+el.dataset.idx]);
+    });
+  }
+  function onInvSlotClick(kind, idx) {
+    const arr = kind === "hotbar" ? inv.hotbar : inv.main;
+    invCarried = inv.swapWith(arr, idx, invCarried);
+    hud.refresh();
+    refreshInvPanel();
+  }
+  function toggleInv() {
+    invOpen = !invOpen;
+    invPanel.classList.toggle("hidden", !invOpen);
+    if (invOpen) {
+      document.exitPointerLock?.();
+      buildInvSlots();
+      refreshInvPanel();
+    } else {
+      showResume();
+    }
+  }
+  $("#inv-close").addEventListener("click", toggleInv);
+
   let recipeSig = "";
   function renderRecipes() {
     const list = $("#recipe-list");
@@ -510,10 +580,16 @@ async function main() {
       if (input.justPressed.has(`Digit${i + 1}`)) { inv.active = i; hud.refresh(); }
     }
     if (input.justPressed.has("KeyE")) toggleCraft();
+    if (input.justPressed.has("Tab") || input.justPressed.has("KeyI")) toggleInv();
     if (input.justPressed.has("KeyF")) player.toggleFly();
 
     if (craftOpen) {
       refreshCraftIfOpen();
+      input.endFrame();
+      renderer.render(scene, camera);
+      return;
+    }
+    if (invOpen) {
       input.endFrame();
       renderer.render(scene, camera);
       return;

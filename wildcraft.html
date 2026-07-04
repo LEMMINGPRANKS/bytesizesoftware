@@ -79,6 +79,21 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #87ceeb;
 #recipe-list { display: grid; grid-template-columns: repeat(2, 320px); gap: 8px;
   max-width: 720px; max-height: 65vh; overflow-y: auto; padding: 4px; }
 #craft-panel button { margin-top: 8px; }
+
+#inv-panel { position: fixed; inset: 0; background: rgba(15,22,30,0.96); z-index: 11;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; }
+#inv-panel h2 { color: #ffd479; }
+#inv-grid, #inv-hotbar { display: grid; grid-template-columns: repeat(9, 54px);
+  gap: 6px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 8px; }
+#inv-hotbar { margin-top: 8px; }
+.inv-slot { width: 54px; height: 54px; border: 2px solid #555; border-radius: 6px;
+  background: rgba(255,255,255,0.06); position: relative; cursor: pointer;
+  background-size: cover; background-position: center; }
+.inv-slot.hotbar.active { border-color: #fff; box-shadow: 0 0 8px #fff; }
+.inv-slot.empty { background: rgba(255,255,255,0.04); }
+.inv-slot .count { position: absolute; bottom: 2px; right: 4px; font-size: 13px;
+  text-shadow: 1px 1px 2px #000; }
 .recipe { display: flex; justify-content: space-between; align-items: center;
   padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;
   border: 1px solid #444; pointer-events: auto; }
@@ -122,11 +137,17 @@ label { display: inline-block; }
   </div>
   <div id="target-info" class="hidden"></div>
 </div>
-<div id="version-tag">0.15.3</div>
+<div id="version-tag">0.16</div>
 <div id="craft-panel" class="hidden">
   <h2>Crafting</h2>
   <div id="recipe-list"></div>
   <button id="craft-close">Close [E]</button>
+</div>
+<div id="inv-panel" class="hidden">
+  <h2>Inventory</h2>
+  <div id="inv-grid"></div>
+  <div id="inv-hotbar"></div>
+  <button id="inv-close">Close [Tab]</button>
 </div>
 <div id="resume-overlay" class="hidden">
   <h2>Paused</h2>
@@ -164,7 +185,7 @@ label { display: inline-block; }
 </div>
 <div id="start-screen">
   <h1>Wildcraft</h1>
-  <p>WASD move · Space jump · Mouse look · Left click mine/attack · Right click/Q place/eat · 1-9 hotbar · E craft</p>
+  <p>WASD move · Space jump · Mouse look · Left click mine/attack · Right click/Q place/eat · 1-9 hotbar · E craft · Tab inventory</p>
   <h2>Pick a World</h2>
   <div id="world-list"></div>
   <div id="new-world-form" class="hidden">
@@ -54749,6 +54770,8 @@ class Input {
     window.addEventListener("keydown", (e) => {
       if (!this.keys.has(e.code)) this.justPressed.add(e.code);
       this.keys.add(e.code);
+      // Stop Tab from moving focus away from the canvas.
+      if (e.code === "Tab") e.preventDefault();
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
 
@@ -55078,28 +55101,40 @@ class MiningController {
 
 // === js/gameplay/inventory.js ===
 (function () {
-// Inventory: { blockId: count }. Hotbar holds up to 9 selected items.
+// Inventory: hotbar (9 slots) + main (27 slots). Counts are stored as a
+// flat map id→count; slot arrays just record which id lives where. An id
+// can sit in either the hotbar or main; null means empty slot.
+const HOTBAR_SIZE = 9;
+const MAIN_SIZE = 27;
+
 class Inventory {
   constructor() {
-    this.items = {};            // id -> count
-    this.hotbar = [null, null, null, null, null, null, null, null, null];
+    this.items = {};
+    this.hotbar = new Array(HOTBAR_SIZE).fill(null);
+    this.main = new Array(MAIN_SIZE).fill(null);
     this.active = 0;
+  }
+  // Place an id into the first empty hotbar slot, then first empty main slot.
+  _assign(id) {
+    if (this.hotbar.includes(id) || this.main.includes(id)) return;
+    let i = this.hotbar.findIndex((s) => s === null);
+    if (i >= 0) { this.hotbar[i] = id; return; }
+    i = this.main.findIndex((s) => s === null);
+    if (i >= 0) this.main[i] = id;
   }
   add(id, count = 1) {
     if (id === B.AIR) return;
     this.items[id] = (this.items[id] || 0) + count;
-    if (!this.hotbar.includes(id)) {
-      const slot = this.hotbar.findIndex((s) => s === null);
-      if (slot >= 0) this.hotbar[slot] = id;
-    }
+    if (this.items[id] === Infinity) this.items[id] = Infinity;
+    this._assign(id);
   }
   remove(id, count = 1) {
     if ((this.items[id] || 0) < count) return false;
     this.items[id] -= count;
-    if (this.items[id] <= 0) delete this.items[id];
-    // Clean hotbar slots that no longer have stock.
-    for (let i = 0; i < this.hotbar.length; i++) {
-      if (this.hotbar[i] === id && (this.items[id] || 0) === 0) this.hotbar[i] = null;
+    if ((this.items[id] || 0) <= 0) {
+      delete this.items[id];
+      for (let i = 0; i < this.hotbar.length; i++) if (this.hotbar[i] === id) this.hotbar[i] = null;
+      for (let i = 0; i < this.main.length; i++) if (this.main[i] === id) this.main[i] = null;
     }
     return true;
   }
@@ -55107,7 +55142,27 @@ class Inventory {
   has(id, n = 1) { return this.count(id) >= n; }
   selected() { return this.hotbar[this.active]; }
   name(id) { return BLOCKS[id]?.name || "?"; }
+  // Swap whatever's held (the carried stack) with the slot's contents.
+  // `carried` is a mutable {id, count} ref or null. Returns updated carried.
+  swapWith(slotArr, idx, carried) {
+    const cur = slotArr[idx];
+    if (carried && cur === null) {
+      slotArr[idx] = carried.id;
+      carried = null;
+    } else if (carried && cur !== null && cur === carried.id) {
+      // No-op: same id, count is already global
+      carried = null;
+    } else if (carried && cur !== null) {
+      slotArr[idx] = carried.id;
+      carried = { id: cur };
+    } else if (!carried && cur !== null) {
+      carried = { id: cur };
+      slotArr[idx] = null;
+    }
+    return carried;
+  }
 }
+
 
   window.Inventory = typeof Inventory !== 'undefined' ? Inventory : undefined;
 })();
@@ -55829,6 +55884,7 @@ async function main() {
           Object.entries(inv.items).map(([k, v]) => [k, v === Infinity ? null : v])
         ),
         hotbar: inv.hotbar,
+        main: inv.main,
         active: inv.active,
       },
       hunger,
@@ -55924,11 +55980,14 @@ async function main() {
   // ---- World list / start-screen wiring ----
   const startScreen = $("#start-screen");
   const craftPanel = $("#craft-panel");
+  const invPanel = $("#inv-panel");
   const resumeOverlay = $("#resume-overlay");
   const worldList = $("#world-list");
   const newWorldForm = $("#new-world-form");
   let gameStarted = false;
   let craftOpen = false;
+  let invOpen = false;
+  let invCarried = null; // {id} when dragging a stack between slots
   let pendingNewSlot = null;
 
   // Pre-warm the texture atlas up front so it's ready when a world loads.
@@ -56101,8 +56160,8 @@ async function main() {
     if (saved && saved.inventory) {
       inv.items = saved.inventory.items || {};
       inv.hotbar = saved.inventory.hotbar || inv.hotbar;
+      inv.main = saved.inventory.main || inv.main;
       inv.active = saved.inventory.active || 0;
-      // Convert any serialised Infinity (JSON has no Infinity) back.
       for (const k of Object.keys(inv.items)) if (inv.items[k] === null) inv.items[k] = Infinity;
     } else {
       inv.add(B.PLANKS, 8);
@@ -56139,7 +56198,7 @@ async function main() {
 
   document.addEventListener("pointerlockchange", () => {
     const locked = document.pointerLockElement === canvas;
-    if (gameStarted && !locked && !craftOpen && startScreen.classList.contains("hidden")) {
+    if (gameStarted && !locked && !craftOpen && !invOpen && startScreen.classList.contains("hidden")) {
       showResume();
     } else if (locked) {
       hideResume();
@@ -56213,6 +56272,72 @@ async function main() {
     showResume();
   });
 
+  // ---- Inventory panel (Tab) ----
+  const invGrid = $("#inv-grid");
+  const invHotbar = $("#inv-hotbar");
+  function buildInvSlots() {
+    invGrid.innerHTML = "";
+    invHotbar.innerHTML = "";
+    for (let i = 0; i < 9; i++) {
+      const s = document.createElement("div");
+      s.className = "inv-slot hotbar";
+      s.dataset.kind = "hotbar";
+      s.dataset.idx = i;
+      s.addEventListener("click", () => onInvSlotClick("hotbar", i));
+      invHotbar.append(s);
+    }
+    for (let i = 0; i < 27; i++) {
+      const s = document.createElement("div");
+      s.className = "inv-slot";
+      s.dataset.kind = "main";
+      s.dataset.idx = i;
+      s.addEventListener("click", () => onInvSlotClick("main", i));
+      invGrid.append(s);
+    }
+  }
+  function refreshInvPanel() {
+    if (!invOpen) return;
+    const drawSlot = (el, id) => {
+      if (id == null) {
+        el.classList.add("empty");
+        el.style.backgroundImage = "";
+        el.textContent = "";
+      } else {
+        el.classList.remove("empty");
+        const tex = getTexture(id, "side");
+        el.style.backgroundImage = `url(${tex.image.toDataURL?.() || tex.image.src})`;
+        const c = inv.count(id);
+        el.textContent = c === Infinity ? "∞" : (c > 1 ? String(c) : "");
+      }
+    };
+    invHotbar.querySelectorAll(".inv-slot").forEach((el) => {
+      const idx = +el.dataset.idx;
+      drawSlot(el, inv.hotbar[idx]);
+      el.classList.toggle("active", idx === inv.active);
+    });
+    invGrid.querySelectorAll(".inv-slot").forEach((el) => {
+      drawSlot(el, inv.main[+el.dataset.idx]);
+    });
+  }
+  function onInvSlotClick(kind, idx) {
+    const arr = kind === "hotbar" ? inv.hotbar : inv.main;
+    invCarried = inv.swapWith(arr, idx, invCarried);
+    hud.refresh();
+    refreshInvPanel();
+  }
+  function toggleInv() {
+    invOpen = !invOpen;
+    invPanel.classList.toggle("hidden", !invOpen);
+    if (invOpen) {
+      document.exitPointerLock?.();
+      buildInvSlots();
+      refreshInvPanel();
+    } else {
+      showResume();
+    }
+  }
+  $("#inv-close").addEventListener("click", toggleInv);
+
   let recipeSig = "";
   function renderRecipes() {
     const list = $("#recipe-list");
@@ -56261,10 +56386,16 @@ async function main() {
       if (input.justPressed.has(`Digit${i + 1}`)) { inv.active = i; hud.refresh(); }
     }
     if (input.justPressed.has("KeyE")) toggleCraft();
+    if (input.justPressed.has("Tab") || input.justPressed.has("KeyI")) toggleInv();
     if (input.justPressed.has("KeyF")) player.toggleFly();
 
     if (craftOpen) {
       refreshCraftIfOpen();
+      input.endFrame();
+      renderer.render(scene, camera);
+      return;
+    }
+    if (invOpen) {
       input.endFrame();
       renderer.render(scene, camera);
       return;
