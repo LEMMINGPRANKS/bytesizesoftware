@@ -1002,7 +1002,6 @@ async function main() {
       return;
     }
     if (tradeOpen) {
-      refreshTradePanel();
       input.endFrame();
       renderer.render(scene, camera);
       return;
