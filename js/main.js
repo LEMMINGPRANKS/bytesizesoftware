@@ -41,14 +41,17 @@ async function main() {
 
   // Torch light pool. Each torch in the world is eligible to drive one of
   // these PointLights; we reassign them to the nearest N torches each tick.
-  // Capped because Three.js re-renders every lit face per light — too many
-  // lights tanks FPS.
-  const TORCH_LIGHT_COUNT = 6;
-  const TORCH_LIGHT_RANGE = 12;
-  const TORCH_LIGHT_INTENSITY = 1.6;
+  // Three.js runs every light through every chunk's fragment shader as long
+  // as the light is `visible` — so we toggle `visible=false` on unused slots
+  // to actually remove them from the shader. Keeping the pool small matters
+  // most in caves where many torches cluster and chunk face counts are high.
+  const TORCH_LIGHT_COUNT = 3;
+  const TORCH_LIGHT_RANGE = 10;
+  const TORCH_LIGHT_INTENSITY = 2.2;
   const torchLights = [];
   for (let i = 0; i < TORCH_LIGHT_COUNT; i++) {
     const l = new THREE.PointLight("#ffb060", 0, TORCH_LIGHT_RANGE, 2.0);
+    l.visible = false;
     scene.add(l);
     torchLights.push(l);
   }
@@ -72,8 +75,11 @@ async function main() {
       if (c) {
         tl.position.set(c.x, c.y, c.z);
         tl.intensity = TORCH_LIGHT_INTENSITY;
+        tl.visible = true;
       } else {
-        tl.intensity = 0;
+        // visible=false removes the light from the shader uniform list
+        // entirely, so distant/empty areas don't pay for unused lights.
+        tl.visible = false;
       }
     }
   }
