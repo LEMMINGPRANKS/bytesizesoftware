@@ -885,7 +885,7 @@ async function main() {
     tradeList.innerHTML = "";
     offers.forEach((o, i) => {
       const row = document.createElement("div");
-      row.className = "trade-row" + (o.count <= 0 ? " out" : "");
+      row.className = "trade-row" + (gold < o.cost ? " out" : "");
       const icon = document.createElement("div");
       icon.className = "icon";
       const tex = getTexture(o.id, "side");
@@ -898,12 +898,10 @@ async function main() {
       cost.textContent = `Cost: ${o.cost} gold`;
       const btn = document.createElement("button");
       btn.textContent = "Buy";
-      btn.disabled = o.count <= 0 || gold < o.cost;
+      btn.disabled = gold < o.cost;
       btn.addEventListener("click", () => {
-        if (o.count <= 0) return;
         if (!spendGold(o.cost)) return;
-        inv.add(o.id, 1);
-        o.count -= 1;
+        inv.add(o.id, o.count);
         hud.refresh();
         refreshTradePanel();
       });
