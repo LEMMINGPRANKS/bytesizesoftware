@@ -33,7 +33,18 @@ export class Input {
       this.dy += e.movementY;
     });
   }
-  requestLock() { this.dom.requestPointerLock?.(); }
+  requestLock() {
+    try {
+      const r = this.dom.requestPointerLock?.();
+      // Modern Chromium returns a Promise that can reject (e.g. if the user
+      // gesture has expired during heavy synchronous boot work, or in some
+      // Electron/sandbox setups). Surface the failure so callers can recover.
+      if (r && typeof r.catch === "function") return r;
+    } catch (e) {
+      return Promise.reject(e);
+    }
+    return Promise.resolve();
+  }
   endFrame() {
     this.dx = 0; this.dy = 0;
     this.mouseJust = [false, false, false];

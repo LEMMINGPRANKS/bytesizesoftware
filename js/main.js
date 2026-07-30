@@ -97,7 +97,7 @@ async function main() {
       creativeMode = true;
       player.fly = true;
       const palette = [
-        B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.PLANKS, B.WALL_STONE, B.BRICK, B.GLASS, B.TORCH,
+        B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.PLANKS, B.BRICK, B.GLASS, B.TORCH, B.WOOD,
       ];
       for (let i = 0; i < palette.length && i < 9; i++) {
         inv.hotbar[i] = palette[i];
@@ -147,6 +147,10 @@ async function main() {
       const res = trees.hitLog(x, y, z);
       if (res) {
         inv.add(B.WOOD, res.logs);
+        // Twigs: 50% chance per log harvested.
+        let twigs = 0;
+        for (let i = 0; i < res.logs; i++) if (Math.random() < 0.5) twigs++;
+        if (twigs > 0) inv.add(B.TWIG, twigs);
         for (let dx = -2; dx <= 2; dx++)
           for (let dy = -2; dy <= 2; dy++)
             for (let dz = -2; dz <= 2; dz++) {
@@ -161,6 +165,8 @@ async function main() {
     }
     world.setBlock(x, y, z, B.AIR);
     if (drop) inv.add(id, 1);
+    // Single wood block: 50% chance to also drop a twig.
+    if (drop && id === B.WOOD && Math.random() < 0.5) inv.add(B.TWIG, 1);
     // If we just broke a chest, dump its contents into the player inventory.
     if (id === B.CHEST) {
       const slots = world.chests.get(World.modKey(x, y, z));
@@ -537,7 +543,12 @@ async function main() {
     startScreen.classList.add("hidden");
     hud.show(true);
     gameStarted = true;
-    input.requestLock();
+    input.requestLock().catch(() => {
+      // Pointer lock can fail on first boot (user gesture consumed by heavy
+      // chunk gen, or Electron sandbox quirks). Show the resume overlay so the
+      // next real click re-requests the lock with a fresh gesture.
+      showResume();
+    });
     setStatus("Ready");
   }
 

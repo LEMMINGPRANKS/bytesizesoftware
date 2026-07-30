@@ -193,6 +193,27 @@ function drawTexture(id, face) {
       ctx.fillRect(7, 4, 2, 2);
       break;
     }
+    case B.TWIG: {
+      // Two crossed small sticks, brown with darker knots.
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      ctx.save();
+      ctx.translate(SIZE / 2, SIZE / 2);
+      for (const ang of [-0.6, 0.7]) {
+        ctx.save();
+        ctx.rotate(ang);
+        ctx.fillStyle = "#7a4f1f";
+        ctx.fillRect(-10, -1, 20, 3);
+        ctx.fillStyle = "#5a3a14";
+        ctx.fillRect(-10, -1, 20, 1);
+        // little side bumps
+        ctx.fillStyle = "#6a4519";
+        ctx.fillRect(-6, -3, 2, 2);
+        ctx.fillRect(3, 1, 2, 2);
+        ctx.restore();
+      }
+      ctx.restore();
+      break;
+    }
     case B.BEDROCK: fillNoise(ctx, base, 10); specks(ctx, "#000", 20); break;
     case B.SEAGRASS: {
       ctx.clearRect(0, 0, SIZE, SIZE);

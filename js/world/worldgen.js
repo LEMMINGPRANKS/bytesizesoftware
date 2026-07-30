@@ -153,8 +153,8 @@ function tryPlaceTradingHouse(chunk, baseX, baseZ, noise) {
           // Solid plank floor so the trader has a clean surface.
           chunk.blocks[chunk.idx(x, y, z)] = B.PLANKS;
         } else if (y === floorY + 4) {
-          // Roof: beam-bordered planks.
-          chunk.blocks[chunk.idx(x, y, z)] = (x === x0 || x === x1 || z === z0 || z === z1) ? B.BEAM : B.PLANKS;
+          // Roof: wood-bordered planks.
+          chunk.blocks[chunk.idx(x, y, z)] = (x === x0 || x === x1 || z === z0 || z === z1) ? B.WOOD : B.PLANKS;
         } else if (isWall) {
           // Walls: planks with a door on the +z side and a torch opposite.
           if (x === cx && z === z1) {

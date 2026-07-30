@@ -71,6 +71,43 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #87ceeb;
   background: rgba(0,0,0,0.7); display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 14px; z-index: 10; }
 #resume-overlay { background: rgba(0,0,0,0.5); cursor: pointer; z-index: 5; }
+
+#start-screen {
+  background-color: #4a4a52;
+  background-image:
+    /* dark vertical mortar lines (block edges) */
+    linear-gradient(to right,  rgba(0,0,0,0.50) 0 2px, transparent 2px 64px),
+    /* dark horizontal mortar lines */
+    linear-gradient(to bottom, rgba(0,0,0,0.50) 0 2px, transparent 2px 64px),
+    /* block face shading: top-left highlight, bottom-right shadow */
+    linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.0) 35%, rgba(0,0,0,0.25) 100%),
+    /* speckle / grit layer */
+    radial-gradient(circle at 25% 30%, rgba(255,255,255,0.04) 0 2px, transparent 2px),
+    radial-gradient(circle at 70% 65%, rgba(0,0,0,0.20) 0 3px, transparent 3px),
+    radial-gradient(circle at 45% 80%, rgba(0,0,0,0.15) 0 2px, transparent 2px);
+  background-size: 64px 64px, 64px 64px, 64px 64px, 64px 64px, 96px 96px, 80px 80px;
+  overflow: hidden;
+}
+#start-screen::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center,
+              rgba(0,0,0,0) 25%, rgba(0,0,0,0.55) 80%, rgba(0,0,0,0.85) 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+#start-screen > * { position: relative; z-index: 1; }
+#start-screen h1 {
+  font-size: 88px;
+  letter-spacing: 4px;
+  margin: 0 0 6px;
+  color: #e8e8ec;
+  text-shadow:
+    0 2px 0 #2a2a30,
+    0 4px 0 #1a1a20,
+    0 6px 12px rgba(0,0,0,0.8),
+    0 0 24px rgba(255,255,255,0.10);
+}
 #resume-overlay button { margin-top: 14px; padding: 10px 18px; font-size: 16px;
   background: #a44; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
 #resume-overlay button:hover { background: #c55; }
@@ -168,7 +205,7 @@ label { display: inline-block; }
   </div>
   <div id="target-info" class="hidden"></div>
 </div>
-<div id="version-tag">1.2</div>
+<div id="version-tag">Beta 1.3.0</div>
 <div id="craft-panel" class="hidden">
   <h2>Crafting</h2>
   <div id="recipe-list"></div>
@@ -53798,6 +53835,7 @@ const B = {
   CHEST: 37,
   DOOR: 38, DOOR_TOP: 39,
   TRADER: 40,
+  TWIG: 41,
 };
 
 const BLOCKS = {
@@ -53844,6 +53882,7 @@ const BLOCKS = {
   [B.PICKAXE_IRON]: { name: "pickaxe_iron", solid: false, hardness: 0.1, color: "#dcdcdc", item: true, tool: "pickaxe", toolTier: 3 },
   [B.PICKAXE_DIAMOND]: { name: "pickaxe_diamond", solid: false, hardness: 0.1, color: "#8af6ff", item: true, tool: "pickaxe", toolTier: 4 },
   [B.PICKAXE_PLATINUM]: { name: "pickaxe_platinum", solid: false, hardness: 0.1, color: "#f0f0f8", item: true, tool: "pickaxe", toolTier: 5 },
+  [B.TWIG]: { name: "twig", solid: false, hardness: 0.1, color: "#8a5f28", item: true },
 };
 
 const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;
@@ -54107,6 +54146,27 @@ function drawTexture(id, face) {
       ctx.fillRect(6, 3, 4, 4);
       ctx.fillStyle = "#ffe070";
       ctx.fillRect(7, 4, 2, 2);
+      break;
+    }
+    case B.TWIG: {
+      // Two crossed small sticks, brown with darker knots.
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      ctx.save();
+      ctx.translate(SIZE / 2, SIZE / 2);
+      for (const ang of [-0.6, 0.7]) {
+        ctx.save();
+        ctx.rotate(ang);
+        ctx.fillStyle = "#7a4f1f";
+        ctx.fillRect(-10, -1, 20, 3);
+        ctx.fillStyle = "#5a3a14";
+        ctx.fillRect(-10, -1, 20, 1);
+        // little side bumps
+        ctx.fillStyle = "#6a4519";
+        ctx.fillRect(-6, -3, 2, 2);
+        ctx.fillRect(3, 1, 2, 2);
+        ctx.restore();
+      }
+      ctx.restore();
       break;
     }
     case B.BEDROCK: fillNoise(ctx, base, 10); specks(ctx, "#000", 20); break;
@@ -54634,8 +54694,8 @@ function tryPlaceTradingHouse(chunk, baseX, baseZ, noise) {
           // Solid plank floor so the trader has a clean surface.
           chunk.blocks[chunk.idx(x, y, z)] = B.PLANKS;
         } else if (y === floorY + 4) {
-          // Roof: beam-bordered planks.
-          chunk.blocks[chunk.idx(x, y, z)] = (x === x0 || x === x1 || z === z0 || z === z1) ? B.BEAM : B.PLANKS;
+          // Roof: wood-bordered planks.
+          chunk.blocks[chunk.idx(x, y, z)] = (x === x0 || x === x1 || z === z0 || z === z1) ? B.WOOD : B.PLANKS;
         } else if (isWall) {
           // Walls: planks with a door on the +z side and a torch opposite.
           if (x === cx && z === z1) {
@@ -54946,7 +55006,6 @@ const TRADE_POOL = [
   { id: B.COOKED_FISH,  count: 2, cost: 2 },
   { id: B.TORCH,        count: 8, cost: 1 },
   { id: B.PLANKS,       count: 16, cost: 1 },
-  { id: B.WALL_STONE,   count: 8, cost: 2 },
   { id: B.BRICK,        count: 8, cost: 2 },
   { id: B.GLASS,        count: 6, cost: 2 },
   { id: B.PICKAXE_IRON, count: 1, cost: 3 },
@@ -55218,7 +55277,18 @@ class Input {
       this.dy += e.movementY;
     });
   }
-  requestLock() { this.dom.requestPointerLock?.(); }
+  requestLock() {
+    try {
+      const r = this.dom.requestPointerLock?.();
+      // Modern Chromium returns a Promise that can reject (e.g. if the user
+      // gesture has expired during heavy synchronous boot work, or in some
+      // Electron/sandbox setups). Surface the failure so callers can recover.
+      if (r && typeof r.catch === "function") return r;
+    } catch (e) {
+      return Promise.reject(e);
+    }
+    return Promise.resolve();
+  }
   endFrame() {
     this.dx = 0; this.dy = 0;
     this.mouseJust = [false, false, false];
@@ -55692,15 +55762,11 @@ class Inventory {
 // inputs {id, count}. Plus some "decorative" variants.
 const RECIPES = [
   { out: [B.PLANKS, 4],    in: [{ id: B.WOOD, count: 1 }],            name: "Planks ×4" },
-  { out: [B.BEAM, 2],      in: [{ id: B.PLANKS, count: 2 }],          name: "Beams ×2" },
-  { out: [B.WALL_WOOD, 1], in: [{ id: B.PLANKS, count: 1 }, { id: B.BEAM, count: 1 }], name: "Wood Wall" },
   { out: [B.COBBLE, 1],    in: [{ id: B.STONE, count: 1 }],           name: "Cobblestone" },
-  { out: [B.WALL_STONE, 1],in: [{ id: B.COBBLE, count: 4 }],          name: "Stone Wall" },
   { out: [B.BRICK, 4],     in: [{ id: B.COBBLE, count: 2 }],          name: "Bricks ×4" },
   { out: [B.GLASS, 1],     in: [{ id: B.SAND, count: 1 }],            name: "Glass" },
   { out: [B.FIREPLACE, 1], in: [{ id: B.COBBLE, count: 4 }, { id: B.WOOD, count: 1 }], name: "Fireplace" },
   { out: [B.TORCH, 4],     in: [{ id: B.WOOD, count: 1 }],            name: "Torch ×4" },
-  { out: [B.ARCH, 1],      in: [{ id: B.BEAM, count: 2 }, { id: B.PLANKS, count: 1 }], name: "Arch" },
   { out: [B.CHEST, 1],     in: [{ id: B.PLANKS, count: 4 }], name: "Chest (27 storage slots)" },
   { out: [B.DOOR, 1],      in: [{ id: B.PLANKS, count: 3 }], name: "Door (right-click to open)" },
   { out: [B.TRADER, 1],    in: [{ id: B.PLANKS, count: 4 }, { id: B.GOLD_ORE, count: 2 }], name: "Trader stall (build your own market)" },
@@ -55710,11 +55776,11 @@ const RECIPES = [
   { out: [B.PLATINUM_BLOCK, 1], in: [{ id: B.PLATINUM_ORE, count: 9 }], name: "Platinum Block" },
   { out: [B.COOKED_BEEF, 1], in: [{ id: B.RAW_BEEF, count: 1 }], name: "Cook Raw Beef (needs fireplace)", needsFire: true },
   { out: [B.COOKED_FISH, 1], in: [{ id: B.RAW_FISH, count: 1 }], name: "Cook Raw Fish (needs fireplace)", needsFire: true },
-  { out: [B.PICKAXE_WOOD, 1],     in: [{ id: B.PLANKS, count: 3 }, { id: B.BEAM, count: 1 }],            name: "Wood Pickaxe (mines stone)" },
-  { out: [B.PICKAXE_STONE, 1],    in: [{ id: B.COBBLE, count: 3 }, { id: B.BEAM, count: 1 }],            name: "Stone Pickaxe (mines iron, gold)" },
-  { out: [B.PICKAXE_IRON, 1],     in: [{ id: B.IRON_BLOCK, count: 1 }, { id: B.BEAM, count: 1 }],        name: "Iron Pickaxe (mines diamond)" },
-  { out: [B.PICKAXE_DIAMOND, 1],  in: [{ id: B.DIAMOND_BLOCK, count: 1 }, { id: B.BEAM, count: 1 }],     name: "Diamond Pickaxe (mines platinum)" },
-  { out: [B.PICKAXE_PLATINUM, 1], in: [{ id: B.PLATINUM_BLOCK, count: 1 }, { id: B.BEAM, count: 1 }],    name: "Platinum Pickaxe (best — mines everything)" },
+  { out: [B.PICKAXE_WOOD, 1],     in: [{ id: B.PLANKS, count: 3 }, { id: B.TWIG, count: 1 }],            name: "Wood Pickaxe (mines stone)" },
+  { out: [B.PICKAXE_STONE, 1],    in: [{ id: B.COBBLE, count: 3 }, { id: B.TWIG, count: 1 }],            name: "Stone Pickaxe (mines iron, gold)" },
+  { out: [B.PICKAXE_IRON, 1],     in: [{ id: B.IRON_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }],        name: "Iron Pickaxe (mines diamond)" },
+  { out: [B.PICKAXE_DIAMOND, 1],  in: [{ id: B.DIAMOND_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }],     name: "Diamond Pickaxe (mines platinum)" },
+  { out: [B.PICKAXE_PLATINUM, 1], in: [{ id: B.PLATINUM_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }],    name: "Platinum Pickaxe (best — mines everything)" },
 ];
 
 // Tool tier hints (informational): wood < stone < iron < gold < diamond < platinum.
@@ -56573,7 +56639,7 @@ async function main() {
       creativeMode = true;
       player.fly = true;
       const palette = [
-        B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.PLANKS, B.WALL_STONE, B.BRICK, B.GLASS, B.TORCH,
+        B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.PLANKS, B.BRICK, B.GLASS, B.TORCH, B.WOOD,
       ];
       for (let i = 0; i < palette.length && i < 9; i++) {
         inv.hotbar[i] = palette[i];
@@ -56623,6 +56689,10 @@ async function main() {
       const res = trees.hitLog(x, y, z);
       if (res) {
         inv.add(B.WOOD, res.logs);
+        // Twigs: 50% chance per log harvested.
+        let twigs = 0;
+        for (let i = 0; i < res.logs; i++) if (Math.random() < 0.5) twigs++;
+        if (twigs > 0) inv.add(B.TWIG, twigs);
         for (let dx = -2; dx <= 2; dx++)
           for (let dy = -2; dy <= 2; dy++)
             for (let dz = -2; dz <= 2; dz++) {
@@ -56637,6 +56707,8 @@ async function main() {
     }
     world.setBlock(x, y, z, B.AIR);
     if (drop) inv.add(id, 1);
+    // Single wood block: 50% chance to also drop a twig.
+    if (drop && id === B.WOOD && Math.random() < 0.5) inv.add(B.TWIG, 1);
     // If we just broke a chest, dump its contents into the player inventory.
     if (id === B.CHEST) {
       const slots = world.chests.get(World.modKey(x, y, z));
@@ -57013,7 +57085,12 @@ async function main() {
     startScreen.classList.add("hidden");
     hud.show(true);
     gameStarted = true;
-    input.requestLock();
+    input.requestLock().catch(() => {
+      // Pointer lock can fail on first boot (user gesture consumed by heavy
+      // chunk gen, or Electron sandbox quirks). Show the resume overlay so the
+      // next real click re-requests the lock with a fresh gesture.
+      showResume();
+    });
     setStatus("Ready");
   }
 

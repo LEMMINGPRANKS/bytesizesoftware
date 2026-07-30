@@ -13,6 +13,7 @@ export const B = {
   CHEST: 37,
   DOOR: 38, DOOR_TOP: 39,
   TRADER: 40,
+  TWIG: 41,
 };
 
 export const BLOCKS = {
@@ -59,6 +60,7 @@ export const BLOCKS = {
   [B.PICKAXE_IRON]: { name: "pickaxe_iron", solid: false, hardness: 0.1, color: "#dcdcdc", item: true, tool: "pickaxe", toolTier: 3 },
   [B.PICKAXE_DIAMOND]: { name: "pickaxe_diamond", solid: false, hardness: 0.1, color: "#8af6ff", item: true, tool: "pickaxe", toolTier: 4 },
   [B.PICKAXE_PLATINUM]: { name: "pickaxe_platinum", solid: false, hardness: 0.1, color: "#f0f0f8", item: true, tool: "pickaxe", toolTier: 5 },
+  [B.TWIG]: { name: "twig", solid: false, hardness: 0.1, color: "#8a5f28", item: true },
 };
 
 export const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;

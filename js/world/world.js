@@ -18,7 +18,6 @@ const TRADE_POOL = [
   { id: B.COOKED_FISH,  count: 2, cost: 2 },
   { id: B.TORCH,        count: 8, cost: 1 },
   { id: B.PLANKS,       count: 16, cost: 1 },
-  { id: B.WALL_STONE,   count: 8, cost: 2 },
   { id: B.BRICK,        count: 8, cost: 2 },
   { id: B.GLASS,        count: 6, cost: 2 },
   { id: B.PICKAXE_IRON, count: 1, cost: 3 },
