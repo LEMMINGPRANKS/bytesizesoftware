@@ -12,7 +12,6 @@ import { Inventory } from "./gameplay/inventory.js";
 import { HUD } from "./ui/hud.js";
 import { RECIPES } from "./gameplay/recipes.js";
 import { canCraft, craft } from "./gameplay/crafting.js";
-import { TreeSystem } from "./gameplay/trees.js";
 import { MobSystem } from "./gameplay/mobs.js";
 import { B, BLOCKS, isSolid, isLiquid } from "./world/blocks.js";
 import { atlasUV, getTexture } from "./world/textures.js";
@@ -84,7 +83,7 @@ async function main() {
     }
   }
   // World/player/etc. are created when a slot is chosen — seed depends on slot.
-  let world, player, input, mining, trees, mobs, inv, hud;
+  let world, player, input, mining, mobs, inv, hud;
   let hunger = 20;
   let lastHungerTick = performance.now();
   let attackCooldown = 0;
@@ -143,26 +142,6 @@ async function main() {
 
   // ---- Block-event handlers (defined once; bound after world exists) ----
   function onBreak(kind, id, x, y, z, drop = true) {
-    if (kind === "tree") {
-      const res = trees.hitLog(x, y, z);
-      if (res) {
-        inv.add(B.WOOD, res.logs);
-        // Twigs: 50% chance per log harvested.
-        let twigs = 0;
-        for (let i = 0; i < res.logs; i++) if (Math.random() < 0.5) twigs++;
-        if (twigs > 0) inv.add(B.TWIG, twigs);
-        for (let dx = -2; dx <= 2; dx++)
-          for (let dy = -2; dy <= 2; dy++)
-            for (let dz = -2; dz <= 2; dz++) {
-              if (world.getBlock(x + dx, y + dy, z + dz) === B.LEAVES) {
-                world.setBlock(x + dx, y + dy, z + dz, B.AIR);
-              }
-            }
-        hud.refresh();
-        return true;
-      }
-      return false;
-    }
     world.setBlock(x, y, z, B.AIR);
     if (drop) inv.add(id, 1);
     // Single wood block: 50% chance to also drop a twig.
@@ -480,7 +459,6 @@ async function main() {
     player = new Player(camera, world);
     input = new Input(canvas);
     mining = new MiningController(world, scene, onBreak, () => inv?.selected());
-    trees = new TreeSystem(world);
     mobs = new MobSystem(world, scene);
     inv = new Inventory();
     hud = new HUD(inv);

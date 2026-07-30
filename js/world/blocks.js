@@ -22,7 +22,7 @@ export const BLOCKS = {
   [B.DIRT]:   { name: "dirt",    solid: true,  hardness: 0.6, color: "#6a4a2a" },
   [B.STONE]:  { name: "stone",   solid: true,  hardness: 1.5, color: "#888888", toolTier: 1 },
   [B.SAND]:   { name: "sand",    solid: true,  hardness: 0.5, color: "#e3d9a2" },
-  [B.WOOD]:   { name: "wood",    solid: true,  hardness: 1.2, top: "#a07a3a", side: "#6b4a1f", treeHealth: true },
+  [B.WOOD]:   { name: "wood",    solid: true,  hardness: 1.2, top: "#a07a3a", side: "#6b4a1f" },
   [B.LEAVES]: { name: "leaves",  solid: true,  hardness: 0.3, color: "#3a7a2a", transparent: true },
   [B.PLANKS]: { name: "planks",  solid: true,  hardness: 1.0, color: "#c89656" },
   [B.BEAM]:   { name: "beam",    solid: true,  hardness: 1.0, color: "#8a5f28" },

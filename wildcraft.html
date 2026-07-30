@@ -205,7 +205,7 @@ label { display: inline-block; }
   </div>
   <div id="target-info" class="hidden"></div>
 </div>
-<div id="version-tag">Beta 1.3.1</div>
+<div id="version-tag">Beta 1.3.2</div>
 <div id="craft-panel" class="hidden">
   <h2>Crafting</h2>
   <div id="recipe-list"></div>
@@ -53844,7 +53844,7 @@ const BLOCKS = {
   [B.DIRT]:   { name: "dirt",    solid: true,  hardness: 0.6, color: "#6a4a2a" },
   [B.STONE]:  { name: "stone",   solid: true,  hardness: 1.5, color: "#888888", toolTier: 1 },
   [B.SAND]:   { name: "sand",    solid: true,  hardness: 0.5, color: "#e3d9a2" },
-  [B.WOOD]:   { name: "wood",    solid: true,  hardness: 1.2, top: "#a07a3a", side: "#6b4a1f", treeHealth: true },
+  [B.WOOD]:   { name: "wood",    solid: true,  hardness: 1.2, top: "#a07a3a", side: "#6b4a1f" },
   [B.LEAVES]: { name: "leaves",  solid: true,  hardness: 0.3, color: "#3a7a2a", transparent: true },
   [B.PLANKS]: { name: "planks",  solid: true,  hardness: 1.0, color: "#c89656" },
   [B.BEAM]:   { name: "beam",    solid: true,  hardness: 1.0, color: "#8a5f28" },
@@ -55809,63 +55809,6 @@ function craft(inv, recipe, context = {}) {
   window.craft = typeof craft !== 'undefined' ? craft : undefined;
 })();
 
-// === js/gameplay/trees.js ===
-(function () {
-// Trees: store health per tree log position. When any log of a tree is hit,
-// damage is dealt to the tree as a whole (a tree has a single shared hp).
-// When hp reaches 0, every log in the tree is broken and dropped.
-class TreeSystem {
-  constructor(world) {
-    this.world = world;
-    // map: any logPosString -> treeId; treeId -> { hp, logs: Set(posString) }
-    this.logToTree = new Map();
-    this.trees = new Map();
-    this.nextId = 1;
-  }
-
-  _key(x, y, z) { return `${x},${y},${z}`; }
-
-  // When a player breaks a WOOD block, register the tree on demand and apply
-  // damage. Returns true if the block should be removed.
-  hitLog(x, y, z, dmg = 1) {
-    const k = this._key(x, y, z);
-    let treeId = this.logToTree.get(k);
-    let tree;
-    if (!treeId) {
-      // Discover connected WOOD column by walking up/down from this log.
-      const logs = new Set();
-      // Find base (lowest log): walk down.
-      let bx = x, by = y, bz = z;
-      while (this.world.getBlock(bx, by - 1, bz) === B.WOOD) by--;
-      // Walk up collecting all logs and any adjacent leaves.
-      let cy = by;
-      while (this.world.getBlock(bx, cy, bz) === B.WOOD) {
-        logs.add(this._key(bx, cy, bz));
-        cy++;
-      }
-      treeId = this.nextId++;
-      tree = { hp: CONFIG.tree.health * logs.size, logs };
-      for (const lk of logs) this.logToTree.set(lk, treeId);
-      this.trees.set(treeId, tree);
-    } else {
-      tree = this.trees.get(treeId);
-    }
-    tree.hp -= dmg * 2; // a hit is meaningful
-    if (tree.hp > 0) return false;
-    // Tree felled: drop all logs.
-    for (const lk of tree.logs) {
-      const [lx, ly, lz] = lk.split(",").map(Number);
-      this.world.setBlock(lx, ly, lz, B.AIR);
-    }
-    this.trees.delete(treeId);
-    for (const lk of tree.logs) this.logToTree.delete(lk);
-    return { logs: tree.logs.size };
-  }
-}
-
-  window.TreeSystem = typeof TreeSystem !== 'undefined' ? TreeSystem : undefined;
-})();
-
 // === js/entities/cow.js ===
 (function () {
 // Cow entity: a wandering mob that can be killed for raw beef.
@@ -56626,7 +56569,7 @@ async function main() {
     }
   }
   // World/player/etc. are created when a slot is chosen — seed depends on slot.
-  let world, player, input, mining, trees, mobs, inv, hud;
+  let world, player, input, mining, mobs, inv, hud;
   let hunger = 20;
   let lastHungerTick = performance.now();
   let attackCooldown = 0;
@@ -56685,26 +56628,6 @@ async function main() {
 
   // ---- Block-event handlers (defined once; bound after world exists) ----
   function onBreak(kind, id, x, y, z, drop = true) {
-    if (kind === "tree") {
-      const res = trees.hitLog(x, y, z);
-      if (res) {
-        inv.add(B.WOOD, res.logs);
-        // Twigs: 50% chance per log harvested.
-        let twigs = 0;
-        for (let i = 0; i < res.logs; i++) if (Math.random() < 0.5) twigs++;
-        if (twigs > 0) inv.add(B.TWIG, twigs);
-        for (let dx = -2; dx <= 2; dx++)
-          for (let dy = -2; dy <= 2; dy++)
-            for (let dz = -2; dz <= 2; dz++) {
-              if (world.getBlock(x + dx, y + dy, z + dz) === B.LEAVES) {
-                world.setBlock(x + dx, y + dy, z + dz, B.AIR);
-              }
-            }
-        hud.refresh();
-        return true;
-      }
-      return false;
-    }
     world.setBlock(x, y, z, B.AIR);
     if (drop) inv.add(id, 1);
     // Single wood block: 50% chance to also drop a twig.
@@ -57022,7 +56945,6 @@ async function main() {
     player = new Player(camera, world);
     input = new Input(canvas);
     mining = new MiningController(world, scene, onBreak, () => inv?.selected());
-    trees = new TreeSystem(world);
     mobs = new MobSystem(world, scene);
     inv = new Inventory();
     hud = new HUD(inv);
