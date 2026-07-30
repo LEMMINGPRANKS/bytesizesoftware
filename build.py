@@ -19,6 +19,7 @@ MODULES = [
     "js/engine/loop.js",
     "js/engine/input.js",
     "js/engine/daynight.js",
+    "js/audio/sfx.js",
     "js/entities/player.js",
     "js/gameplay/mining.js",
     "js/gameplay/inventory.js",

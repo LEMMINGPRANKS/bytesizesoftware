@@ -5,6 +5,7 @@ import { Chunk, CHUNK_SIZE, CHUNK_HEIGHT } from "./chunk.js";
 import { B } from "./blocks.js";
 
 const W = CONFIG.world;
+const BI = CONFIG.biomes;
 const ORE_TABLE = [
   [B.PLATINUM_ORE, CONFIG.ores.platinum],
   [B.DIAMOND_ORE, CONFIG.ores.diamond],
@@ -16,6 +17,7 @@ export function generateChunk(cx, cz, noise) {
   const chunk = new Chunk(cx, cz);
   const baseX = cx * CHUNK_SIZE, baseZ = cz * CHUNK_SIZE;
   const treesHere = [];
+  const cactiHere = [];
 
   for (let x = 0; x < CHUNK_SIZE; x++) {
     for (let z = 0; z < CHUNK_SIZE; z++) {
@@ -26,6 +28,20 @@ export function generateChunk(cx, cz, noise) {
       const warpX = (noise.height(wx * 0.004 + 333, wz * 0.004, 2) - 0.5) * 18;
       const warpZ = (noise.height(wx * 0.004 - 222, wz * 0.004 + 111, 2) - 0.5) * 18;
       const sx = wx + warpX, sz = wz + warpZ;
+
+      // ---- Biome selection ----
+      // Low-frequency noise carved into bands. Spawn is forced to normal
+      // temperate within ~120 blocks so day-1 isn't a glacier or vast
+      // desert — those are out there to be discovered.
+      const distFromSpawn = Math.hypot(wx, wz);
+      const biomeNoise = noise.height(sx * BI.freq + 7777, sz * BI.freq - 7777, 3);
+      const adjustedBiome = distFromSpawn < 120
+        ? "normal"
+        : biomeNoise < BI.iceBand
+          ? "ice"
+          : biomeNoise > BI.desertBand
+            ? "desert"
+            : "normal";
 
       // Layered height: gentle hills + occasional dramatic mountains.
       let hill = (noise.height(sx * 0.012, sz * 0.012, 5) - 0.5) * 2;
@@ -41,21 +57,40 @@ export function generateChunk(cx, cz, noise) {
       // Pull origin onto land: bias continent up within ~150 blocks of (0,0)
       // so the player always spawns on solid ground even if the global
       // continent noise would otherwise put us mid-ocean.
-      const distFromSpawn = Math.hypot(wx, wz);
       const centerBias = Math.max(0, 1 - distFromSpawn / 150) * 0.45;
       cont = Math.min(1, cont + centerBias);
       const oceanFactor = Math.max(0, Math.min(1, cont / 0.55)); // 0..1
       const dip = (1 - oceanFactor) * (1 - oceanFactor) * 48;    // 0..48
       hill *= 0.25 + oceanFactor * 0.75;                          // flatten hills underwater
 
-      const h = Math.floor(W.baseHeight + hill * W.hillHeight + mtn * W.mountainHeight - dip);
+      // Lakes: a separate low-freq noise creates depressions below sea
+      // level on land. Lake bed drops by up to BI.lakeDepth. Ice biome
+      // lakes freeze solid (handled below).
+      const lakeN = noise.height(sx * BI.lakeFreq + 314, sz * BI.lakeFreq - 271, 3);
+      const lakeMask = oceanFactor > 0.5 && lakeN > 0.62 ? (lakeN - 0.62) / 0.38 : 0;
+      const lakeDip = lakeMask * lakeMask * BI.lakeDepth;
+
+      const h = Math.floor(W.baseHeight + hill * W.hillHeight + mtn * W.mountainHeight - dip - lakeDip);
       const surface = Math.max(1, Math.min(CHUNK_HEIGHT - 6, h));
+      const isLake = lakeDip > 1 && surface < W.baseHeight + 4;
 
       for (let y = 0; y <= surface; y++) {
         let id;
         if (y === 0) id = B.BEDROCK;
-        else if (y === surface) id = surface <= W.seaLevel + 1 ? B.SAND : B.GRASS;
-        else if (y >= surface - 3) id = B.DIRT;
+        else if (y === surface) {
+          // Surface block depends on biome + height + lake state.
+          if (surface <= W.seaLevel + 1) id = B.SAND;
+          else if (adjustedBiome === "desert") id = B.SAND;
+          else if (adjustedBiome === "ice") id = B.SNOW;
+          else if (isLake) id = B.DIRT;
+          else id = B.GRASS;
+        }
+        else if (y >= surface - 3) {
+          // Subsurface: sand in desert, dirt elsewhere. Ice biome keeps a
+          // thin dirt layer under the snow so the player isn't walking on
+          // permafrost down to stone.
+          id = adjustedBiome === "desert" ? B.SAND : B.DIRT;
+        }
         else id = B.STONE;
 
         // Ore veins underground. Two-octave noise check produces smaller,
@@ -83,10 +118,17 @@ export function generateChunk(cx, cz, noise) {
         }
         chunk.blocks[chunk.idx(x, y, z)] = id;
       }
-      // Water fill up to sea level.
+
+      // ---- Water / ice fill ----
+      // Oceans and lakes fill with water normally; ice biome freezes the top
+      // few layers into solid ICE so the player can walk across. Glaciers
+      // rise a couple of blocks above sea level in the ice biome for relief.
       if (surface < W.seaLevel) {
-        for (let y = surface + 1; y <= W.seaLevel; y++) {
-          chunk.blocks[chunk.idx(x, y, z)] = B.WATER;
+        const fillTop = W.seaLevel;
+        for (let y = surface + 1; y <= fillTop; y++) {
+          const isSurfaceLayer = y >= fillTop - 2;
+          chunk.blocks[chunk.idx(x, y, z)] =
+            (adjustedBiome === "ice" && isSurfaceLayer) ? B.ICE : B.WATER;
         }
         // Seagrass on the seabed if it's not too deep (≤ 4 blocks of water).
         if (W.seaLevel - surface <= 4 &&
@@ -96,14 +138,57 @@ export function generateChunk(cx, cz, noise) {
           chunk.blocks[chunk.idx(x, surface + 1, z)] = B.SEAGRASS;
         }
       }
-      // Trees on grass, above sea, not at chunk border so we don't straddle.
-      if (chunk.blocks[chunk.idx(x, surface, z)] === B.GRASS &&
+
+      // Glaciers in ice biome: occasional column rises 1-3 blocks of ice
+      // above the snow surface to give the landscape relief.
+      if (adjustedBiome === "ice" && surface > W.seaLevel &&
+          noise.hash(wx, 19, wz) < BI.glacierChance) {
+        const glacierH = 1 + Math.floor(noise.hash(wx, 23, wz) * 3);
+        for (let dy = 0; dy < glacierH; dy++) {
+          if (surface + 1 + dy < CHUNK_HEIGHT)
+            chunk.blocks[chunk.idx(x, surface + 1 + dy, z)] = B.ICE;
+        }
+      }
+
+      // Trees: only in normal biome on grass, away from chunk borders.
+      if (adjustedBiome === "normal" &&
+          chunk.blocks[chunk.idx(x, surface, z)] === B.GRASS &&
           x > 2 && x < CHUNK_SIZE - 3 && z > 2 && z < CHUNK_SIZE - 3 &&
           noise.hash(wx, 7, wz) < CONFIG.tree.density) {
         treesHere.push({ x, y: surface + 1, z, height: CONFIG.tree.minHeight +
           Math.floor(noise.hash(wx, 13, wz) * (CONFIG.tree.maxHeight - CONFIG.tree.minHeight + 1)) });
       }
+      // Cacti: in desert biome, 1-3 blocks tall. Same interior-border rule
+      // so a cactus never straddles a chunk boundary.
+      if (adjustedBiome === "desert" &&
+          chunk.blocks[chunk.idx(x, surface, z)] === B.SAND &&
+          x > 1 && x < CHUNK_SIZE - 2 && z > 1 && z < CHUNK_SIZE - 2 &&
+          noise.hash(wx, 91, wz) < BI.cactusDensity) {
+        cactiHere.push({ x, y: surface + 1, z,
+          height: 1 + Math.floor(noise.hash(wx, 17, wz) * 3) });
+      }
     }
+  }
+
+  for (const t of treesHere) {
+    if (t.y + t.height >= CHUNK_HEIGHT) continue;
+    for (let i = 0; i < t.height; i++) chunk.blocks[chunk.idx(t.x, t.y + i, t.z)] = B.WOOD;
+    // Leaves: a 5x5x3 blob at top.
+    const top = t.y + t.height - 1;
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -2; dx <= 2; dx++)
+        for (let dz = -2; dz <= 2; dz++) {
+          if (Math.abs(dx) + Math.abs(dz) + Math.abs(dy) > 4) continue;
+          const lx = t.x + dx, ly = top + dy, lz = t.z + dz;
+          if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE) continue;
+          if (chunk.blocks[chunk.idx(lx, ly, lz)] === B.AIR)
+            chunk.blocks[chunk.idx(lx, ly, lz)] = B.LEAVES;
+        }
+  }
+  for (const c of cactiHere) {
+    if (c.y + c.height > CHUNK_HEIGHT) continue;
+    for (let i = 0; i < c.height; i++)
+      chunk.blocks[chunk.idx(c.x, c.y + i, c.z)] = B.CACTUS;
   }
 
   for (const t of treesHere) {

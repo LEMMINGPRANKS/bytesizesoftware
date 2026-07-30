@@ -244,6 +244,8 @@ export function buildChunkMesh(chunk, world) {
     geo.setIndex(layer.indices);
     const mesh = new THREE.Mesh(geo, material);
     mesh.position.set(chunk.cx * MCS, 0, chunk.cz * MCS);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     return mesh;
   }
 

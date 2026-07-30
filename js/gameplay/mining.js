@@ -51,6 +51,9 @@ export class MiningController {
     this._crackMat = null;
   }
   _key(t) { return t ? `${t.x},${t.y},${t.z}` : null; }
+  // Current crack stage (0..9) — exposed so the SFX layer can pitch-shift
+  // mining taps as the block weakens without peeking into private state.
+  crackStage() { return this._lastStage || 0; }
 
   // Returns the current target block as {x,y,z,face} or null.
   acquire(player) {

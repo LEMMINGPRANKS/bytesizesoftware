@@ -33,9 +33,10 @@ export class DayNight {
   // Sun elevation in [-1,1]: -1 = midnight (sun directly below), 0 = horizon
   // (sunrise/sunset), +1 = noon (overhead).
   elevation() { return -Math.cos(this.time * Math.PI * 2); }
-  // Daylight mix factor [0,1]: 0 deep night, ~0.35 twilight, 1 full day.
-  dayFactor() { return Math.max(0, Math.min(1, this.elevation() * 0.7 + 0.35)); }
-  update(dt) {
+  // Daylight mix factor [0,1]: 0 deep night, ~0.5 twilight, 1 full day.
+  // Rises faster than the old linear curve so mornings read as daytime.
+  dayFactor() { return Math.max(0, Math.min(1, this.elevation() * 0.6 + 0.5)); }
+  update(dt, followPos) {
     this.time = (this.time + dt / DAY_LENGTH) % 1;
 
     // Sun angle: ang=0 at sunrise (time=0.25), π/2 at noon, π at sunset.
@@ -44,14 +45,23 @@ export class DayNight {
     const sx = Math.cos(ang);
     const sy = Math.sin(ang);
     const sz = 0.35; // slight tilt so shadows aren't perfectly axis-aligned
-    this.sun.position.set(sx * 80, sy * 100, sz * 80);
+    // For shadow mapping the directional light's shadow camera is anchored
+    // at sun.position, so we centre it on the player (in followPos) — that
+    // keeps the shadow frustum around the action instead of around origin.
+    const fx = followPos ? followPos.x : 0;
+    const fy = followPos ? followPos.y : 0;
+    const fz = followPos ? followPos.z : 0;
+    this.sun.position.set(fx + sx * 80, fy + sy * 100, fz + sz * 80);
+    this.sun.target.position.set(fx, fy, fz);
+    this.sun.target.updateMatrixWorld();
 
     // Intensities — dim everything at night, but never fully dark so the
-    // player can still see. Sun rises/falls with elevation.
+    // player can still see. Sun rises/falls with elevation. Mornings get a
+    // strong ambient floor so the world doesn't feel dingy at low sun angles.
     const day = this.dayFactor();
-    this.sun.intensity = 0.05 + day * 1.10;
-    this.ambient.intensity = 0.18 + day * 0.40;
-    this.hemi.intensity = 0.12 + day * 0.30;
+    this.sun.intensity = 0.10 + day * 1.20;
+    this.ambient.intensity = 0.35 + day * 0.55;
+    this.hemi.intensity = 0.22 + day * 0.40;
 
     // Sun colour shifts warm at sunrise/sunset, white at noon, cool at night.
     const warm = Math.max(0, 1 - Math.abs(this.elevation()) * 1.5);

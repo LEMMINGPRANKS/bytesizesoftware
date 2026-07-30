@@ -23,6 +23,12 @@ import { getSettings, saveSettings, applySettings, DEFAULTS } from "./save/setti
 
 const $ = (s) => document.querySelector(s);
 
+// Unlock the AudioContext on the very first user gesture anywhere in the
+// document — browsers refuse to start audio without one, and the play
+// button itself is sometimes too late if the user fiddles with settings.
+window.addEventListener("pointerdown", () => resume(), { once: true });
+window.addEventListener("keydown", () => resume(), { once: true });
+
 function setStatus(msg) {
   const el = document.getElementById("boot-status");
   if (el) el.textContent = msg;
@@ -90,6 +96,11 @@ async function main() {
   let creativeMode = false;
   let activeSlot = null;
   let lastAutoSave = performance.now();
+  // SFX cadence state — kept module-scoped so they survive HUD redraws.
+  let footstepAcc = 0;       // horizontal distance walked since last footstep
+  let miningTapAcc = 0;      // seconds of active mining since last tap sound
+  let prevOnGround = true;   // for landing detection
+  let prevPos = new THREE.Vector3();
 
   function applyMode(mode) {
     if (mode === "creative") {
@@ -141,8 +152,25 @@ async function main() {
   }
 
   // ---- Block-event handlers (defined once; bound after world exists) ----
+  // Map block ids to one of the sfx material strings so a single helper
+  // covers both break + mining-tap sounds. Defaults to "stone" for anything
+  // hard (ores, brick, etc.) — the caller doesn't have to special-case.
+  function materialOf(id) {
+    const d = BLOCKS[id];
+    if (!d) return "stone";
+    if (d.liquid) return "dirt";
+    if (id === B.WOOD || id === B.PLANKS) return "wood";
+    if (id === B.LEAVES) return "leaves";
+    if (id === B.CACTUS) return "wood";
+    if (id === B.SAND || id === B.SNOW) return "sand";
+    if (id === B.DIRT || id === B.GRASS) return "dirt";
+    if (id === B.ICE || id === B.GLASS) return "glass";
+    if (id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DOOR) return "metal";
+    return "stone";
+  }
   function onBreak(kind, id, x, y, z, drop = true) {
     world.setBlock(x, y, z, B.AIR);
+    blockBreak(materialOf(id));
     if (drop) inv.add(id, 1);
     // Single wood block: 50% chance to also drop a twig.
     if (drop && id === B.WOOD && Math.random() < 0.5) inv.add(B.TWIG, 1);
@@ -212,6 +240,7 @@ async function main() {
     world.setBlock(px, py, pz, sel);
     if (sel === B.DOOR) world.setBlock(px, py + 1, pz, B.DOOR_TOP);
     inv.remove(sel, 1);
+    place();
     hud.refresh();
   }
   function toggleDoorAt(x, y, z) {
@@ -219,7 +248,9 @@ async function main() {
     let by = y;
     if (world.getBlock(x, y, z) === B.DOOR_TOP) by = y - 1;
     if (world.getBlock(x, by, z) !== B.DOOR) return;
+    const wasOpen = world.isDoorOpen(x, by, z);
     world.toggleDoor(x, by, z);
+    door(!wasOpen);
     // Re-mesh the chunk(s) that contain the door so the panel swings.
     const cx = Math.floor(x / CONFIG.world.chunkSize), cz = Math.floor(z / CONFIG.world.chunkSize);
     const c = world.getChunk(cx, cz);
@@ -232,6 +263,7 @@ async function main() {
     if (hunger >= 20) return;
     if (!inv.remove(id, 1)) return;
     hunger = Math.min(20, hunger + def.food);
+    eat();
     hud.setHunger(hunger);
     hud.refresh();
   }
@@ -482,7 +514,7 @@ async function main() {
     // Rebuild the torch index from persisted block edits so the light pool
     // works immediately on load.
     for (const [k, v] of world.modified) {
-      if (v === B.TORCH) world.torches.add(k);
+      if (v !== B.AIR && BLOCKS[v] && BLOCKS[v].light) world.torches.add(k);
     }
 
     // Pre-generate spawn chunks so player has ground.
@@ -521,6 +553,13 @@ async function main() {
     startScreen.classList.add("hidden");
     hud.show(true);
     gameStarted = true;
+    resume();
+    startAmbient();
+    // Footstep / landing state resets so a freshly booted world doesn't
+    // immediately play a thud from stale prev-frame data.
+    prevOnGround = player.onGround;
+    footstepAcc = 0;
+    miningTapAcc = 0;
     input.requestLock().catch(() => {
       // Pointer lock can fail on first boot (user gesture consumed by heavy
       // chunk gen, or Electron sandbox quirks). Show the resume overlay so the
@@ -821,6 +860,7 @@ async function main() {
   function openChest(x, y, z) {
     chestPos = { x, y, z };
     chestOpen = true;
+    uiPanel();
     invCarried = null; chestCarried = null;
     document.exitPointerLock?.();
     chestPanel.classList.remove("hidden");
@@ -907,6 +947,7 @@ async function main() {
   function openTrader(x, y, z) {
     tradePos = { x, y, z };
     tradeOpen = true;
+    uiPanel();
     world.getTrader(x, y, z); // lazily create offers if missing
     document.exitPointerLock?.();
     tradePanel.classList.remove("hidden");
@@ -1012,7 +1053,64 @@ async function main() {
 
     player.update(dt, input);
 
-    dayNight.update(dt);
+    // --- SFX: footsteps, mining taps, landing ---
+    // Footstep cadence is driven by horizontal distance travelled while
+    // grounded — every ~2.2 blocks a footstep fires with the surface the
+    // player is standing on. Falling/jumping skips the cadence so air time
+    // is silent. Mining taps run on a time accumulator while the player
+    // holds MINE, with pitch tracking the crack stage.
+    const moved = Math.hypot(player.pos.x - prevPos.x, player.pos.z - prevPos.z);
+    if (player.onGround && moved > 0.0001 && !player.fly) {
+      footstepAcc += moved;
+      // Cadence scales slightly with speed so sprinting isn't just louder,
+      // it actually steps faster.
+      const stride = 2.0;
+      if (footstepAcc >= stride) {
+        footstepAcc = 0;
+        const below = world.getBlock(
+          Math.floor(player.pos.x),
+          Math.floor(player.pos.y - 0.2),
+          Math.floor(player.pos.z)
+        );
+        footstep(materialOf(below));
+      }
+    } else {
+      footstepAcc = 0;
+    }
+    // Landing: only fires when transitioning from air → ground, with a
+    // heavier thud the further the fall. Skipped on first frame after boot.
+    if (!prevOnGround && player.onGround && prevPos.y - player.pos.y > -0.01) {
+      const drop = Math.max(0, prevPos.y - player.pos.y);
+      land(Math.min(1.5, 0.4 + drop * 0.15));
+    }
+    prevOnGround = player.onGround;
+    prevPos.copy(player.pos);
+
+    // Mining tap cadence: while the player is actively mining (LMB held +
+    // aiming at a block), fire a tap every ~0.13s of progress.
+    if (input.mouseDown[0]) {
+      const t2 = mining.acquire(player);
+      if (t2) {
+        const id2 = world.getBlock(t2.x, t2.y, t2.z);
+        const d2 = BLOCKS[id2];
+        if (d2 && d2.hardness !== Infinity) {
+          miningTapAcc += dt;
+          if (miningTapAcc >= 0.13) {
+            miningTapAcc = 0;
+            mineHit(materialOf(id2), mining.crackStage());
+          }
+        }
+      } else {
+        miningTapAcc = 0;
+      }
+    } else {
+      miningTapAcc = 0;
+    }
+
+    dayNight.update(dt, player.pos);
+    // Wind ambient: quieter during full day, slightly louder at dawn/dusk
+    // and night, so the world feels stiller when the sun is up.
+    setAmbient(0.08 + (1 - dayNight.dayFactor()) * 0.08);
 
     // Reassign torch lights to the nearest torches a few times per second —
     // doing it every frame is wasteful since torches don't move.

@@ -26,17 +26,28 @@ export const CONFIG = {
   },
   ores: {
     // Higher frequency in worldgen → smaller, more scattered veins. Lower
-    // thresholds for the rare tiers so they appear more often despite each
-    // vein being smaller.
-    iron:    { minDepth: 4,  threshold: 0.80, color: "#caa472", freq: 0.16 },
-    gold:    { minDepth: 10, threshold: 0.84, color: "#ffd700", freq: 0.16 },
-    diamond: { minDepth: 18, threshold: 0.88, color: "#7afcff", freq: 0.18 },
-    platinum:{ minDepth: 28, threshold: 0.90, color: "#e8e8f0", freq: 0.18 },
+    // thresholds = ore appears more often. Tuned for 1.0 so the underground
+    // feels generous without becoming a treasure chest.
+    iron:    { minDepth: 3,  threshold: 0.74, color: "#b89066", freq: 0.16 },
+    gold:    { minDepth: 8,  threshold: 0.78, color: "#d9b94a", freq: 0.16 },
+    diamond: { minDepth: 14, threshold: 0.82, color: "#6fa3a8", freq: 0.18 },
+    platinum:{ minDepth: 24, threshold: 0.85, color: "#cfd0d8", freq: 0.18 },
   },
   tree: {
     minHeight: 4,
     maxHeight: 7,
     health: 6,            // per log block
     density: 0.012,       // chance per surface column
+  },
+  biomes: {
+    // Low-frequency noise picks a per-column biome. Thresholds carve the
+    // 0..1 biome noise into bands: ice < desertBand < normal < desert.
+    freq: 0.0035,
+    iceBand: 0.30,        // noise < this → ice biome
+    desertBand: 0.72,     // noise > this → desert biome
+    cactusDensity: 0.025, // chance per sand column in desert
+    lakeFreq: 0.012,      // lake depression noise frequency
+    lakeDepth: 6,         // max lake depression below baseline
+    glacierChance: 0.4,   // chance an ice-biome column is a glacier block
   },
 };

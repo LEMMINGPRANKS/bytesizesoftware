@@ -14,6 +14,9 @@ export const B = {
   DOOR: 38, DOOR_TOP: 39,
   TRADER: 40,
   TWIG: 41,
+  ICE: 42,
+  CACTUS: 43,
+  SNOW: 44,
 };
 
 export const BLOCKS = {
@@ -29,10 +32,10 @@ export const BLOCKS = {
   [B.WALL_STONE]: { name: "wall_stone", solid: true, hardness: 3.0, color: "#6e6e72" },
   [B.WALL_WOOD]:  { name: "wall_wood",  solid: true, hardness: 2.0, color: "#7a5a2a" },
   [B.FIREPLACE]: { name: "fireplace", solid: true, hardness: 3.5, color: "#3a2a1a", light: 14 },
-  [B.IRON_ORE]: { name: "iron_ore", solid: true, hardness: 2.5, color: "#caa472", toolTier: 2 },
-  [B.GOLD_ORE]: { name: "gold_ore", solid: true, hardness: 3.0, color: "#ffd700", toolTier: 2 },
-  [B.DIAMOND_ORE]: { name: "diamond_ore", solid: true, hardness: 4.0, color: "#7afcff", toolTier: 3 },
-  [B.PLATINUM_ORE]: { name: "platinum_ore", solid: true, hardness: 5.0, color: "#e8e8f0", toolTier: 4 },
+  [B.IRON_ORE]: { name: "iron_ore", solid: true, hardness: 2.5, color: "#b89066", toolTier: 2 },
+  [B.GOLD_ORE]: { name: "gold_ore", solid: true, hardness: 3.0, color: "#d9b94a", toolTier: 2 },
+  [B.DIAMOND_ORE]: { name: "diamond_ore", solid: true, hardness: 4.0, color: "#6fa3a8", toolTier: 3 },
+  [B.PLATINUM_ORE]: { name: "platinum_ore", solid: true, hardness: 5.0, color: "#cfd0d8", toolTier: 4 },
   [B.PICKAXE_STONE]: { name: "pickaxe_stone", solid: false, hardness: 0.1, color: "#9a9a9a", item: true, tool: "pickaxe", toolTier: 2 },
   [B.SEAGRASS]: { name: "seagrass", solid: false, hardness: 0.1, color: "#2a7a3a", transparent: true, decor: true },
   [B.RAW_FISH]: { name: "raw_fish", solid: false, hardness: 0.1, color: "#c8d8e0", item: true, food: 2 },
@@ -61,6 +64,9 @@ export const BLOCKS = {
   [B.PICKAXE_DIAMOND]: { name: "pickaxe_diamond", solid: false, hardness: 0.1, color: "#8af6ff", item: true, tool: "pickaxe", toolTier: 4 },
   [B.PICKAXE_PLATINUM]: { name: "pickaxe_platinum", solid: false, hardness: 0.1, color: "#f0f0f8", item: true, tool: "pickaxe", toolTier: 5 },
   [B.TWIG]: { name: "twig", solid: false, hardness: 0.1, color: "#8a5f28", item: true },
+  [B.ICE]:   { name: "ice",   solid: true,  hardness: 0.6, color: "#9cc4d8", transparent: true },
+  [B.CACTUS]:{ name: "cactus",solid: true,  hardness: 0.4, color: "#3a7a3a" },
+  [B.SNOW]:  { name: "snow",  solid: true,  hardness: 0.3, color: "#eef2f6" },
 };
 
 export const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;

@@ -155,14 +155,27 @@ function drawTexture(id, face) {
       break;
     }
     case B.IRON_ORE: case B.GOLD_ORE: case B.DIAMOND_ORE: case B.PLATINUM_ORE: {
+      // Stone base — same neutral grey as regular stone, so the ore reads as
+      // flecks embedded in rock rather than a glowing cluster.
       fillNoise(ctx, hexToRgb("#888"), 18);
-      const ore = baseColor;
-      for (let i = 0; i < 10; i++) {
+      const ore = hexToRgb(baseColor);
+      // Scatter small flecks (1x1 or 2x2) with per-pixel brightness jitter so
+      // each fleck looks like a separate crystal grain, not a flat square.
+      for (let i = 0; i < 14; i++) {
         const x = (Math.random() * SIZE) | 0, y = (Math.random() * SIZE) | 0;
-        ctx.fillStyle = ore;
-        ctx.fillRect(x, y, 2, 2);
-        ctx.fillStyle = "rgba(255,255,255,0.4)";
-        ctx.fillRect(x, y, 1, 1);
+        const w = Math.random() < 0.5 ? 1 : 2;
+        const j = (Math.random() * 2 - 1) * 25;
+        ctx.fillStyle = rgb(
+          Math.max(0, Math.min(255, ore[0] + j)),
+          Math.max(0, Math.min(255, ore[1] + j)),
+          Math.max(0, Math.min(255, ore[2] + j))
+        );
+        ctx.fillRect(x, y, w, w);
+        // Tiny highlight on the corner for a specular feel.
+        if (w === 2) {
+          ctx.fillStyle = "rgba(255,255,255,0.25)";
+          ctx.fillRect(x, y, 1, 1);
+        }
       }
       break;
     }
@@ -404,6 +417,42 @@ function drawTexture(id, face) {
       for (let i = 0; i < 8; i++) {
         ctx.fillRect((rng() * SIZE) | 0, (rng() * SIZE) | 0, 1, 1);
       }
+      break;
+    }
+    case B.ICE: {
+      // Translucent pale-blue sheet with bright cracks so glaciers read as
+      // ice rather than blue glass.
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      ctx.fillStyle = "rgba(170,210,235,0.62)";
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      // Subtle internal shading.
+      specks(ctx, "rgba(255,255,255,0.20)", 14);
+      specks(ctx, "rgba(120,170,210,0.25)", 10);
+      // Cracks: thin white lines drawn from random points.
+      const rng = mulberry(7);
+      ctx.strokeStyle = "rgba(255,255,255,0.55)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(rng() * SIZE, rng() * SIZE);
+        ctx.lineTo(rng() * SIZE, rng() * SIZE);
+        ctx.stroke();
+      }
+      break;
+    }
+    case B.SNOW: {
+      // Near-white with faint blue speckle for a frosty feel.
+      fillNoise(ctx, hexToRgb("#eef2f6"), 6);
+      specks(ctx, "rgba(200,220,235,0.4)", 8);
+      break;
+    }
+    case B.CACTUS: {
+      // Green body with darker spine line down the middle + faint speckle.
+      fillNoise(ctx, hexToRgb("#3a7a3a"), 14);
+      ctx.fillStyle = "#2a5a2a";
+      ctx.fillRect(7, 0, 2, SIZE);
+      ctx.fillStyle = "rgba(180,220,160,0.4)";
+      ctx.fillRect(7, 0, 1, SIZE);
       break;
     }
     default: fillNoise(ctx, base, 20); break;

@@ -6,7 +6,7 @@ import { generateChunk } from "./worldgen.js";
 import { Noise } from "./noise.js";
 import { Chunk, CHUNK_SIZE } from "./chunk.js";
 import { buildChunkMesh } from "./mesher.js";
-import { B } from "./blocks.js";
+import { B, BLOCKS } from "./blocks.js";
 
 // Trade pool: each entry is {id, count, cost}. Traders roll a small random
 // selection from this list. Costs are in gold-coin units (player pays with
@@ -102,6 +102,20 @@ export class World {
           c.set(wx - x0, wy, wz - z0, v);
         }
       }
+      // Register any light-emitting blocks the worldgen placed (trader-stall
+      // torches, etc.) so the PointLight pool can find them. Player edits go
+      // through setBlock which keeps this set in sync afterwards.
+      const x0 = cx * CHUNK_SIZE, z0 = cz * CHUNK_SIZE;
+      for (let y = 0; y < CONFIG.world.chunkHeight; y++) {
+        for (let lz = 0; lz < CHUNK_SIZE; lz++) {
+          for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+            const id = c.get(lx, y, lz);
+            if (id !== B.AIR && BLOCKS[id] && BLOCKS[id].light) {
+              this.torches.add(World.modKey(x0 + lx, y, z0 + lz));
+            }
+          }
+        }
+      }
     }
     return c;
   }
@@ -123,7 +137,8 @@ export class World {
     const k = World.modKey(wx, wy, wz);
     // Keep the torch index in sync with player edits so the light pool can
     // find them quickly without scanning the whole modified map each frame.
-    if (v === B.TORCH) this.torches.add(k);
+    const emits = v !== B.AIR && BLOCKS[v] && BLOCKS[v].light;
+    if (emits) this.torches.add(k);
     else if (this.torches.has(k)) this.torches.delete(k);
     c.set(lx, wy, lz, v);
     this.modified.set(k, v);

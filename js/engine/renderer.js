@@ -8,6 +8,11 @@ export function createRenderer(canvas) {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
+  // Shadows: PCFSoft gives soft edges without paying for VSM. Sun is the
+  // only shadow-caster; torches are too short-range to bother.
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
   const scene = new THREE.Scene();
   scene.background = new THREE.Color("#87ceeb");
   const fogFar = Math.max(40, s.renderDistance * 16 + 8);
@@ -18,7 +23,20 @@ export function createRenderer(canvas) {
 
   const sun = new THREE.DirectionalLight("#fff5d8", 1.05);
   sun.position.set(40, 80, 20);
+  // Shadow camera covers a square around the player; tight bounds keep the
+  // 1024×1024 shadow map crisp. Updated each frame to follow the player.
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.camera.left = -36;
+  sun.shadow.camera.right = 36;
+  sun.shadow.camera.top = 36;
+  sun.shadow.camera.bottom = -36;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 220;
+  sun.shadow.bias = -0.0008;
+  sun.target.position.set(0, 0, 0);
   scene.add(sun);
+  scene.add(sun.target);
   const ambient = new THREE.AmbientLight("#aebfd0", 0.55);
   scene.add(ambient);
 
