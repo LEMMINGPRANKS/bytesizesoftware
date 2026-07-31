@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>bytesizedprojects.com</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #ffffff; color: #1a1a1a; line-height: 1.7; }
+    a { color: inherit; text-decoration: none; }
+
+    nav {
+      position: sticky; top: 0;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid #e8e8e8;
+      padding: 0 40px; height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+      z-index: 100;
+    }
+    .nav-logo { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
+    .nav-logo span { color: #00aa66; }
+    .nav-links { display: flex; gap: 32px; font-size: 14px; color: #555; }
+    .nav-links a:hover { color: #1a1a1a; }
+
+    .hero {
+      max-width: 760px; margin: 0 auto;
+      padding: 96px 24px 80px; text-align: center;
+    }
+    .hero-badge {
+      display: inline-block; background: #f0faf5; color: #00885a;
+      border: 1px solid #b8e8d4; border-radius: 99px;
+      font-size: 12px; font-weight: 500; padding: 4px 14px;
+      margin-bottom: 28px; letter-spacing: 0.3px;
+    }
+    .hero h1 { font-size: 52px; font-weight: 700; letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 20px; color: #0d0d0d; }
+    .hero h1 span { color: #00aa66; }
+    .hero p { font-size: 18px; color: #555; max-width: 540px; margin: 0 auto 36px; }
+
+    .btn-primary { background: #0d0d0d; color: #fff; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 500; border: none; cursor: pointer; transition: background 0.15s; display[...]
+    .btn-primary:hover { background: #333; }
+    .btn-secondary { background: #fff; color: #1a1a1a; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 500; border: 1px solid #ddd; cursor: pointer; transition: border-color [...]
+    .btn-secondary:hover { border-color: #aaa; }
+
+    .divider { border: none; border-top: 1px solid #ebebeb; margin: 0; }
+
+    section { padding: 80px 24px; }
+    .section-inner { max-width: 960px; margin: 0 auto; }
+    .section-label { font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px; }
+    .section-label.green { color: #00aa66; }
+    .section-label.blue { color: #0066cc; }
+    .section-label.gold { color: #cc8800; }
+    .section-label.purple { color: #7744cc; }
+    .project-card.game { border-top: 3px solid #7744cc; }
+    .project-tag.purple { background: #f5f0ff; color: #5533aa; }
+    .btn-download.purple { background: #7744cc; color: #fff; }
+    .btn-download.purple:hover { background: #6633aa; }
+    .section-title { font-size: 32px; font-weight: 700; letter-spacing: -0.8px; margin-bottom: 16px; color: #0d0d0d; }
+    .section-sub { font-size: 16px; color: #666; max-width: 520px; margin-bottom: 48px; }
+
+    .projects-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 24px; }
+    .project-card {
+      border: 1px solid #ebebeb; border-radius: 16px; padding: 32px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .project-card.infra { border-top: 3px solid #00aa66; }
+    .project-card.arch { border-top: 3px solid #0066cc; }
+    .project-card.vault { border-top: 3px solid #cc8800; }
+    .project-tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 99px; letter-spacing: 0.5px; }
+    .project-tag.green { background: #f0faf5; color: #00885a; }
+    .project-tag.blue { background: #f0f6ff; color: #0055bb; }
+    .project-tag.gold { background: #fff8e6; color: #996600; }
+    .project-card h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .project-card p { font-size: 15px; color: #555; line-height: 1.6; }
+    .project-card .btn-download { display: inline-block; padding: 10px 22px; border-radius: 8px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; }
+    .btn-download.green { background: #00aa66; color: #fff; }
+    .btn-download.green:hover { background: #008855; }
+    .btn-download.blue { background: #0066cc; color: #fff; }
+    .btn-download.blue:hover { background: #0055aa; }
+    .btn-download.gold { background: #cc8800; color: #fff; }
+    .btn-download.gold:hover { background: #aa7000; }
+
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+    .feature-card { background: #fafafa; border: 1px solid #ebebeb; border-radius: 12px; padding: 24px; }
+    .feature-icon { width: 36px; height: 36px; background: #f0faf5; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 16px; }
+    .feature-icon.blue { background: #f0f6ff; }
+    .feature-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+    .feature-card p { font-size: 14px; color: #666; line-height: 1.6; }
+
+    .formats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+    .format-card { border: 1px solid #ebebeb; border-radius: 12px; padding: 28px; }
+    .format-tag { display: inline-block; font-family: monospace; font-size: 13px; font-weight: 700; background: #0d0d0d; color: #00cc77; padding: 4px 10px; border-radius: 6px; margin-bottom: 16px;[...]
+    .format-tag.blue { color: #00aaff; }
+    .format-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 10px; }
+    .format-card p { font-size: 14px; color: #666; line-height: 1.6; }
+
+    .dep-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+    .dep-card { border: 1px solid #ebebeb; border-radius: 10px; padding: 20px; }
+    .dep-name { font-family: monospace; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+    .dep-version { font-size: 11px; color: #aaa; font-family: monospace; margin-bottom: 10px; }
+    .dep-desc { font-size: 13px; color: #666; line-height: 1.5; }
+
+    .install-box { background: #0d0d0d; border-radius: 10px; padding: 16px 24px; font-family: monospace; font-size: 14px; max-width: 420px; margin-bottom: 8px; }
+    .install-box span { color: #00cc77; }
+    .install-box span.blue { color: #00aaff; }
+
+    .terminal-wrap { max-width: 680px; margin: 60px auto 0; border-radius: 12px; border: 1px solid #e0e0e0; overflow: hidden; }
+    .terminal-bar { background: #f5f5f5; border-bottom: 1px solid #e0e0e0; padding: 10px 16px; display: flex; align-items: center; gap: 6px; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot-red { background: #ff5f56; } .dot-yellow { background: #ffbd2e; } .dot-green { background: #27c93f; }
+    .terminal-title { font-size: 12px; color: #888; margin-left: 8px; }
+    .terminal-body { background: #0d0d0d; padding: 20px 24px; font-family: monospace; font-size: 13px; line-height: 2; }
+    .t-prompt { color: #555; } .t-cmd { color: #fff; } .t-out-green { color: #00cc77; } .t-out-blue { color: #00aaff; } .t-comment { color: #444; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } .hero h1 { font-size: 36px; } nav { padding: 0 20px; } .nav-links { display: none; } .projects-grid { grid-template-column[...]
+
+    footer { padding: 32px 40px; border-top: 1px solid #ebebeb; display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #aaa; }
+    footer a { color: #aaa; } footer a:hover { color: #555; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">bytesizedprojects<span>.com</span></div>
+  <div class="nav-links">
+    <a href="#projects">Projects</a>
+    <a href="#infrastructure">Infrastructure</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#vault">Vault</a>
+    <a href="#games">Games</a>
+    <a href="#formats">Formats</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge">Open Source Tools</div>
+  <h1>Small tools.<br /><span>Big ideas.</span></h1>
+  <p>bytesizedprojects.com is home to open source developer tools built from scratch — starting with Infrastructure and Architecture.</p>
+  <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+    <a href="#projects"><button class="btn-primary">See the projects</button></a>
+    <a href="#formats"><button class="btn-secondary">File formats</button></a>
+  </div>
+
+  <div class="terminal-wrap">
+    <div class="terminal-bar">
+      <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+      <span class="terminal-title">bash</span>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-comment"># Bundle and compress your project</span></div>
+      <div><span class="t-prompt">$ </span><span class="t-cmd">node infra.js pack ./myproject -o bundle.idf</span></div>
+      <div><span class="t-out-green">✓ Packed 14 files into bundle.idf</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-comment"># Compress code intelligently</span></div>
+      <div><span class="t-prompt">$ </span><span class="t-cmd">node arch.js compress main.js -o main.arf</span></div>
+      <div><span class="t-out-blue">✓ 12 chunks extracted — 68% smaller</span></div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider" />
+
+<!-- PROJECTS -->
+<section id="projects">
+  <div class="section-inner">
+    <div class="section-label green">Projects</div>
+    <h2 class="section-title">Two tools, one download each</h2>
+    <p class="section-sub">Each tool is self-contained, open source, and runs on Node.js.</p>
+    <div class="projects-grid">
+      <div class="project-card infra">
+        <div><span class="project-tag green">v1.0.0</span></div>
+        <h2>Infrastructure</h2>
+        <p>A CLI tool for bundling, compressing, and managing files. Features its own <code>.idf</code> and <code>.ipf</code> file formats, plus a full desktop GUI called Infrastructure Wizard.</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <a href="https://github.com/LemmingPranks/brickwork.online/raw/main/infrastructure.zip" download>
+            <button class="btn-download green">⬇ Download infrastructure.zip</button>
+          </a>
+          <a href="#infrastructure"><button class="btn-secondary" style="padding:10px 18px; font-size:13px;">Learn more</button></a>
+        </div>
+      </div>
+      <div class="project-card arch">
+        <div><span class="project-tag blue">v1.0.0</span></div>
+        <h2>Architecture</h2>
+        <p>An intelligent code compression tool for JavaScript, C, C++, and C#. Parses your code into labelled semantic chunks stored in the open <code>.arf</code> format.</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <a href="https://github.com/LemmingPranks/brickwork.online/raw/main/Architecture.zip" download>
+            <button class="btn-download blue">⬇ Download architecture.zip</button>
+          </a>
+          <a href="#architecture"><button class="btn-secondary" style="padding:10px 18px; font-size:13px;">Learn more</button></a>
+        </div>
+      </div>
+      <div class="project-card vault">
+        <div><span class="project-tag gold">v1.0.0</span></div>
+        <h2>Vault</h2>
+        <p>A file encryption tool using a unique master key division algorithm. Encrypts any file into the open <code>.vlt</code> format — decryptable only with the original master key.</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <a href="https://github.com/LemmingPranks/brickwork.online/raw/main/vault.zip" download>
+            <button class="btn-download gold">⬇ Download vault.zip</button>
+          </a>
+          <a href="#vault"><button class="btn-secondary" style="padding:10px 18px; font-size:13px;">Learn more</button></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- INFRASTRUCTURE -->
+<section id="infrastructure">
+  <div class="section-inner">
+    <div class="section-label green">Infrastructure</div>
+    <h2 class="section-title">File management, re-engineered</h2>
+    <p class="section-sub">A full suite of CLI commands for bundling, compressing, and inspecting files — with a visual Electron GUI.</p>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">📦</div>
+        <h3>Pack & Unpack</h3>
+        <p>Bundle entire folders into a single <code>.idf</code> file and restore them back exactly as they were.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🗜️</div>
+        <h3>Compress</h3>
+        <p>Compress any folder into a standard <code>.zip</code> archive using maximum compression.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📎</div>
+        <h3>Bundle</h3>
+        <p>Combine multiple files into one output file with clear separators between each.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">✏️</div>
+        <h3>Code Editor</h3>
+        <p>Write multi-file JavaScript projects in Infrastructure Wizard and save them as compressed <code>.ipf</code> files.</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top:48px; margin-bottom:20px; font-size:18px; font-weight:600;">Dependencies</h3>
+    <div class="dep-grid">
+      <div class="dep-card"><div class="dep-name">commander</div><div class="dep-version">^13.1.0</div><div class="dep-desc">CLI argument and command parsing.</div></div>
+      <div class="dep-card"><div class="dep-name">archiver</div><div class="dep-version">^6.0.2</div><div class="dep-desc">Streaming zip archive creation.</div></div>
+      <div class="dep-card"><div class="dep-name">fs-extra</div><div class="dep-version">^11.3.5</div><div class="dep-desc">Enhanced file system operations.</div></div>
+      <div class="dep-card"><div class="dep-name">chalk</div><div class="dep-version">^4.1.2</div><div class="dep-desc">Coloured terminal output.</div></div>
+      <div class="dep-card"><div class="dep-name">glob</div><div class="dep-version">^11.0.2</div><div class="dep-desc">File pattern matching for directory walking.</div></div>
+      <div class="dep-card"><div class="dep-name">electron</div><div class="dep-version">^36.3.1</div><div class="dep-desc">Desktop GUI framework. (Dev dependency.)</div></div>
+    </div>
+
+    <h3 style="margin-top:48px; margin-bottom:20px; font-size:18px; font-weight:600;">Get started</h3>
+    <div class="install-box"><span>npm install</span></div>
+    <div class="install-box"><span>node infra.js --help</span></div>
+    <div class="install-box"><span>npm run wizard</span></div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <div class="section-inner">
+    <div class="section-label blue">Architecture</div>
+    <h2 class="section-title">Intelligent code compression</h2>
+    <p class="section-sub">Architecture parses your code into semantic chunks — functions, classes, variables, loops — and stores just the labels. Supports JavaScript, C, C++, and C#.</p>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon blue">⚡</div>
+        <h3>Semantic parsing</h3>
+        <p>Understands your code structure — not just bytes. Extracts functions, classes, imports, loops, and variables.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon blue">🏗️</div>
+        <h3>Four languages</h3>
+        <p>Full support for JavaScript, C, C++, and C#. Each language has its own tailored parser.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon blue">🔍</div>
+        <h3>Inspect anytime</h3>
+        <p>Open any <code>.arf</code> file and instantly see every chunk that was extracted from the original code.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon blue">🖥️</div>
+        <h3>Architecture Wizard</h3>
+        <p>A visual Electron GUI for compressing and inspecting files — with a colour-coded chunk viewer.</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top:48px; margin-bottom:20px; font-size:18px; font-weight:600;">Dependencies</h3>
+    <div class="dep-grid">
+      <div class="dep-card"><div class="dep-name">commander</div><div class="dep-version">^13.1.0</div><div class="dep-desc">CLI argument and command parsing.</div></div>
+      <div class="dep-card"><div class="dep-name">chalk</div><div class="dep-version">^4.1.2</div><div class="dep-desc">Coloured terminal output.</div></div>
+      <div class="dep-card"><div class="dep-name">fs-extra</div><div class="dep-version">^11.3.5</div><div class="dep-desc">Enhanced file system operations.</div></div>
+      <div class="dep-card"><div class="dep-name">electron</div><div class="dep-version">^36.3.1</div><div class="dep-desc">Desktop GUI framework. (Dev dependency.)</div></div>
+    </div>
+
+    <h3 style="margin-top:48px; margin-bottom:20px; font-size:18px; font-weight:600;">Get started</h3>
+    <div class="install-box"><span class="blue">npm install</span></div>
+    <div class="install-box"><span class="blue">node arch.js compress main.js -o main.arf</span></div>
+    <div class="install-box"><span class="blue">npm run wizard</span></div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- VAULT -->
+<section id="vault">
+  <div class="section-inner">
+    <div class="section-label gold">Vault</div>
+    <h2 class="section-title">File encryption, your way</h2>
+    <p class="section-sub">Vault encrypts any file using a unique master key division algorithm. Each byte is split into a quotient and remainder using your key — unreadable without it.</p>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon" style="background:#fff8e6">🔒</div>
+        <h3>Master key encryption</h3>
+        <p>Your master key's character values determine the divisor. Every file encrypted with a different key produces a completely different result.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:#fff8e6">🔓</div>
+        <h3>Exact decryption</h3>
+        <p>Quotients and remainders are stored separately in the <code>.vlt</code> file — the original byte is reconstructed perfectly on decryption.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:#fff8e6">🔍</div>
+        <h3>Inspect safely</h3>
+        <p>View the header of any <code>.vlt</code> file — source name, creation date, byte count — without needing the master key.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:#fff8e6">🖥️</div>
+        <h3>Vault Wizard</h3>
+        <p>A desktop Electron GUI with encrypt, decrypt, and inspect panels. Master key fields are password-masked for safety.</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top:48px; margin-bottom:20px; font-size:18px; font-weight:600;">Dependencies</h3>
+    <div class="dep-grid">
+      <div class="dep-card"><div class="dep-name">commander</div><div class="dep-version">^13.1.0</div><div class="dep-desc">CLI argument and command parsing.</div></div>
+      <div class="dep-card"><div class="dep-name">chalk</div><div class="dep-version">^4.1.2</div><div class="dep-desc">Coloured terminal output.</div></div>
+      <div class="dep-card"><div class="dep-name">fs-extra</div><div class="dep-version">^11.3.5</div><div class="dep-desc">Enhanced file system operations.</div></div>
+      <div class="dep-card"><div class="dep-name">electron</div><div class="dep-version">^36.3.1</div><div class="dep-desc">Desktop GUI framework. (Dev dependency.)</div></div>
+    </div>
+
+    <h3 style="margin-top:48px; margin-bottom:20px; font-size:18px; font-weight:600;">Get started</h3>
+    <div class="install-box"><span style="color:#ffaa00">npm install</span></div>
+    <div class="install-box"><span style="color:#ffaa00">node vault.js encrypt secret.txt -k "mykey" -o secret.vlt</span></div>
+    <div class="install-box"><span style="color:#ffaa00">node vault.js decrypt secret.vlt -k "mykey" -o restored.txt</span></div>
+  </div>
+</section>
+
+<hr class="divider" />
+<section id="games">
+  <div class="section-inner">
+    <div class="section-label purple">Games</div>
+    <h2 class="section-title">Not just tools</h2>
+    <p class="section-sub">Games built from scratch, same as everything else here.</p>
+    <div class="projects-grid">
+      <div class="project-card game">
+        <div><span class="project-tag purple">v1.0 — Linux</span></div>
+        <h2>Wildcraft</h2>
+        <p>A voxel sandbox game — build, mine, and explore a blocky world. Ships as a portable Linux AppImage with everything bundled in, so there's nothing to install.</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <a href="https://github.com/LemmingPranks/brickwork.online/releases/download/1.0/Wildcraft-1_0-portable.zip" download>
+            <button class="btn-download purple">⬇ Download for Linux (102 MB)</button>
+          </a>
+        </div>
+        <div style="margin-top:8px; font-size:13px; color:#888;">
+          <strong style="color:#555;">How to run:</strong> unzip, then <code>chmod +x Wildcraft.AppImage</code> and run <code>./Wildcraft.AppImage</code>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<section id="formats">
+  <div class="section-inner">
+    <div class="section-label green">File Formats</div>
+    <h2 class="section-title">Three open formats</h2>
+    <p class="section-sub">bytesizedprojects tools introduce four custom file formats, all open and human-readable.</p>
+    <div class="formats-grid">
+      <div class="format-card">
+        <div class="format-tag">.idf</div>
+        <h3>Infrastructure Decompressable Folder</h3>
+        <p>Stores multiple files and a full directory structure in a single plain-text file. Includes a header, file table, and raw contents.</p>
+      </div>
+      <div class="format-card">
+        <div class="format-tag">.ipf</div>
+        <h3>Infrastructure Project File</h3>
+        <p>A gzip-compressed multi-file JavaScript project. Write in Wizard, save tiny, reload anytime.</p>
+      </div>
+      <div class="format-card">
+        <div class="format-tag blue">.arf</div>
+        <h3>Architecture File</h3>
+        <p>A semantically compressed code file. Stores labelled chunks — functions, classes, variables — instead of raw source text.</p>
+      </div>
+      <div class="format-card">
+        <div class="format-tag" style="color:#ffaa00">.vlt</div>
+        <h3>Vault File</h3>
+        <p>An encrypted file format. Each byte of the original file is stored as a quotient and remainder derived from the master key — unreadable without it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div>© 2026 bytesizedprojects.com — All tools are open source</div>
+  <div style="display:flex; gap:24px;">
+    <a href="#projects">Projects</a>
+    <a href="#formats">Formats</a>
+    <a href="https://github.com/LemmingPranks">GitHub</a>
+  </div>
+</footer>
+
+</body>
+</html>
