@@ -7,6 +7,7 @@ import { Input } from "./engine/input.js";
 import { DayNight } from "./engine/daynight.js";
 import { World } from "./world/world.js";
 import { Player } from "./entities/player.js";
+import { MoonGolem } from "./entities/moongolem.js";
 import { MiningController, raycastVoxel } from "./gameplay/mining.js";
 import { Inventory } from "./gameplay/inventory.js";
 import { HUD } from "./ui/hud.js";
@@ -43,7 +44,7 @@ async function main() {
     const canvas = document.createElement("canvas");
     root.appendChild(canvas);
 
-  const { renderer, scene, camera, sun, ambient, hemi } = createRenderer(canvas);
+  const { renderer, scene, camera, sun, ambient, hemi, worldLayer } = createRenderer(canvas);
   const dayNight = new DayNight(scene, camera, sun, ambient, hemi);
 
   // Torch light pool. Each torch in the world is eligible to drive one of
@@ -59,7 +60,7 @@ async function main() {
   for (let i = 0; i < TORCH_LIGHT_COUNT; i++) {
     const l = new THREE.PointLight("#ffb060", 0, TORCH_LIGHT_RANGE, 2.0);
     l.visible = false;
-    scene.add(l);
+    worldLayer.add(l);
     torchLights.push(l);
   }
   let torchLightAcc = 0;
@@ -97,9 +98,22 @@ async function main() {
   let attackCooldown = 0;
   let creativeMode = false;
   let activeSlot = null;
+  // Dimension state — overworldReturn is set when leaving for the moon so we
+  // can pop back to the same spot. bossGolem holds the active Moon Rock
+  // Golem instance so we can show its HP bar and clean it up on return.
+  let overworldReturn = null;
+  let bossGolem = null;
+  let gameWon = false;
+  // Floating origin: snaps to a grid so the player stays within ~8 blocks of
+  // scene-space (0,0,0). Set every frame after player.update(). Only X/Z — Y
+  // is bounded 0..chunkHeight so doesn't need rebasing.
+  const floatingOrigin = new THREE.Vector3(0, 0, 0);
   let mpActiveSlot = null; // set when world was launched via Host/Join
   let mpIsHost = false;    // only host streams world dumps to newcomers
   let lastAutoSave = performance.now();
+  let lavaAcc = 0;
+  let portalAcc = 0;
+  let inPortal = false;
   // Remote player avatars: actorNr -> { group, body, head, label, target: Vector3 }
   const remoteAvatars = new Map();
   let mpStateAcc = 0; // accumulates dt for 15Hz position broadcast
@@ -115,6 +129,7 @@ async function main() {
       player.fly = true;
       const palette = [
         B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.PLANKS, B.BRICK, B.GLASS, B.TORCH, B.WOOD,
+        B.PLATINUM_BLOCK, B.LAVA, B.WATER, B.LEAVES, B.SAND, B.GOLD_BLOCK, B.IRON_BLOCK,
       ];
       for (let i = 0; i < palette.length && i < 9; i++) {
         inv.hotbar[i] = palette[i];
@@ -185,6 +200,49 @@ async function main() {
     world.setBlock(x, y, z, id);
     if (isInRoom()) sendBlockEdit(x, y, z, id);
   }
+
+  // Dimension travel: called when the player stands in a PORTAL block.
+  // Overworld → moon saves return position + spawns the boss once. Moon →
+  // overworld restores return position and despawns the golem. Physics
+  // (gravity, jump) scales down on the moon so jumps feel low-g.
+  function travelDimension() {
+    const goingToMoon = world.dimension === "overworld";
+    if (goingToMoon) {
+      overworldReturn = { x: player.pos.x, y: player.pos.y, z: player.pos.z,
+                          yaw: player.yaw, pitch: player.pitch };
+      CONFIG.player.gravity = 6;   // ~1/4 Earth — bouncy low-g
+      CONFIG.player.jump = 7;
+      world.switchDimension("moon");
+      world.ensureChunk(0, 0);
+      const h = world.surfaceHeight(8, 8);
+      player.pos.set(8.5, h + 2, 8.5);
+      player.vel.set(0, 0, 0);
+      pushChat("MOON", "You step through the portal. Low gravity. Beware the Golem.");
+      if (typeof window.humm === "function") window.humm();
+      if (!bossGolem && !gameWon) {
+        world.ensureChunk(1, 0);
+        const bx = 20, bz = 8;
+        const bh = world.surfaceHeight(bx, bz);
+        bossGolem = new MoonGolem(
+          new THREE.Vector3(bx + 0.5, bh + 1, bz + 0.5),
+          worldLayer, world,
+        );
+      }
+    } else {
+      CONFIG.player.gravity = 24;
+      CONFIG.player.jump = 8;
+      world.switchDimension("overworld");
+      const r = overworldReturn || { x: 8.5, y: 50, z: 8.5 };
+      player.pos.set(r.x, r.y, r.z);
+      player.vel.set(0, 0, 0);
+      if (r.yaw !== undefined) { player.yaw = r.yaw; player.pitch = r.pitch; }
+      overworldReturn = null;
+      pushChat("MOON", "You return to Earth.");
+      if (bossGolem) { bossGolem.remove(); bossGolem = null; }
+    }
+    player.fly = creativeMode;
+    inPortal = true;
+  }
   function mpApplyRemoteBlock(edit) {
     if (!world) return;
     world.setBlock(edit.x, edit.y, edit.z, edit.id);
@@ -225,7 +283,7 @@ async function main() {
     );
     nose.position.set(0, 1.75, -0.35);
     group.add(body, head, nose, makeNameSprite(name || "Player"));
-    scene.add(group);
+    worldLayer.add(group);
     remoteAvatars.set(actorNr, {
       group, body, head,
       target: new THREE.Vector3(0, 0, 0),
@@ -236,7 +294,7 @@ async function main() {
   function despawnRemoteAvatar(actorNr) {
     const a = remoteAvatars.get(actorNr);
     if (!a) return;
-    scene.remove(a.group);
+    worldLayer.remove(a.group);
     a.body.geometry.dispose(); a.head.geometry.dispose();
     remoteAvatars.delete(actorNr);
   }
@@ -316,6 +374,7 @@ async function main() {
     if (sel === null) return;
     const def = BLOCKS[sel];
     if (def?.food) { eat(sel); return; }
+    if (def?.bucket) { useBucket(sel, t); return; }
     if (def?.item) return; // don't place tools/items in the world
     if (!t) return;
     // Raycast returns face=null when the player's eye starts inside a solid
@@ -341,6 +400,65 @@ async function main() {
     inv.remove(sel, 1);
     place();
     hud.refresh();
+  }
+
+  // Pick block (middle-click): grab whatever block the player is aiming at
+  // into the selected hotbar slot. Creative gives infinite; survival only
+  // works if the block is already in the inventory (just selects it).
+  function pickBlock() {
+    const t = mining.acquire(player);
+    if (!t) return;
+    const id = world.getBlock(t.x, t.y, t.z);
+    if (id === B.AIR) return;
+    const def = BLOCKS[id];
+    if (!def) return;
+    // Don't pick bedrock, portal blocks, or non-item blocks you shouldn't
+    // be able to place (e.g. torches are fine, doors are fine).
+    if (id === B.BEDROCK || def.portal) return;
+    if (creativeMode) {
+      const slot = inv.active ?? 0;
+      inv.hotbar[slot] = id;
+      inv.items[id] = Infinity;
+    } else {
+      // Survival: only select if already owned. Otherwise no-op.
+      if (!inv.has(id)) return;
+      const existing = inv.hotbar.indexOf(id);
+      if (existing >= 0) inv.active = existing;
+    }
+    hud.refresh();
+  }
+
+  // Bucket use: empty picks up the clicked water/lava source block; full
+  // places a source block at the targeted empty cell and empties the bucket.
+  // The swap is `inv.remove` + `inv.add` so the bucket slot moves around as
+  // expected (matching Minecraft behaviour).
+  function useBucket(sel, t) {
+    const def = BLOCKS[sel];
+    if (def.empty) {
+      if (!t) return;
+      const target = world.getBlock(t.x, t.y, t.z);
+      if (target !== B.WATER && target !== B.LAVA) return;
+      // Only pick up source blocks (those without a liquid level entry).
+      if (world.liquidLevels.has(World.modKey(t.x, t.y, t.z))) return;
+      mpSetBlock(t.x, t.y, t.z, B.AIR);
+      inv.remove(sel, 1);
+      inv.add(target === B.WATER ? B.WATER_BUCKET : B.LAVA_BUCKET, 1);
+      place();
+      hud.refresh();
+    } else {
+      // Place contents: target the empty neighbour cell, same as placing a
+      // normal block. Bail if there's no face (eye in solid block).
+      if (!t || !t.face) return;
+      const px = t.x + t.face[0], py = t.y + t.face[1], pz = t.z + t.face[2];
+      if (py < 0 || py >= CONFIG.world.chunkHeight) return;
+      if (world.getBlock(px, py, pz) !== B.AIR) return;
+      const placed = def.contains === "WATER" ? B.WATER : B.LAVA;
+      mpSetBlock(px, py, pz, placed);
+      inv.remove(sel, 1);
+      inv.add(B.BUCKET, 1);
+      place();
+      hud.refresh();
+    }
   }
   function toggleDoorAt(x, y, z) {
     // `y` may be either half of the door — find the bottom.
@@ -382,6 +500,34 @@ async function main() {
     attackCooldown = 0.4;
     const origin = player.eyePos();
     const dir = player.lookDir();
+    // Boss first: if you're pointing at the golem, hits land there even if
+    // a cow is technically in the same arc — boss fights take priority.
+    if (bossGolem && bossGolem.alive) {
+      const bc = bossGolem.pos.clone(); bc.y += bossGolem.height / 2;
+      const toC = bc.clone().sub(origin);
+      const proj = toC.dot(dir);
+      if (proj > 0 && proj < CONFIG.mining.range + 2) {
+        const closestPt = origin.clone().add(dir.clone().multiplyScalar(proj));
+        if (closestPt.distanceTo(bc) < 1.4) {
+          const wasAlive = bossGolem.alive;
+          const carried = getCarried();
+          // Tool-tier damage: pickaxes hurt more; platinum pickaxe hurts most.
+          let dmg = 4;
+          const carriedDef = carried !== null ? BLOCKS[carried] : null;
+          if (carriedDef?.toolTier) dmg = 4 + carriedDef.toolTier * 2;
+          bossGolem.hit(dmg, player.pos);
+          if (wasAlive && !bossGolem.alive) {
+            // Trophy drop + victory flag.
+            inv.add(B.PLATINUM_TROPHY, 1);
+            gameWon = true;
+            pushChat("MOON", "The Moon Rock Golem crumbles. YOU HAVE BEATEN WILDCRAFT.");
+            if (typeof window.humm === "function") window.humm();
+          }
+          if (typeof window.hurt === "function") window.hurt();
+          return;
+        }
+      }
+    }
     const cow = mobs.raycast(origin, dir, CONFIG.mining.range + 1);
     if (cow) {
       const wasAlive = cow.alive;
@@ -587,15 +733,28 @@ async function main() {
 
   function bootWorld(mode, seed, saved) {
     setStatus("Generating world…");
-    world = new World(scene, seed);
+    world = new World(worldLayer, seed);
     player = new Player(camera, world);
     input = new Input(canvas);
-    mining = new MiningController(world, scene, onBreak, () => inv?.selected());
-    mobs = new MobSystem(world, scene);
+    mining = new MiningController(world, worldLayer, onBreak, () => inv?.selected());
+    mobs = new MobSystem(world, worldLayer);
     inv = new Inventory();
     hud = new HUD(inv);
     hunger = 20;
     lastHungerTick = performance.now();
+    // Wire the boss attack callback — when the golem lands a hit on the
+    // moon, drain hunger + flash the hurt sound. Creative mode is immune.
+    world._bossAttackCallback = () => {
+      if (creativeMode) return;
+      hunger = Math.max(0, hunger - 3);
+      hud.setHunger(hunger);
+      if (typeof window.hurt === "function") window.hurt();
+      if (hunger <= 0) {
+        player.spawn();
+        hunger = 6;
+        hud.setHunger(hunger);
+      }
+    };
     attackCooldown = 0;
     creativeMode = false;
 
@@ -845,6 +1004,62 @@ async function main() {
     }
   }
   $("#inv-close").addEventListener("click", toggleInv);
+
+  // ---- Creative picker (P) ----
+  // Shows every placeable block; click to drop onto the currently selected
+  // hotbar slot. Survival mode never opens it.
+  const creativePanel = $("#creative-panel");
+  const creativeGrid = $("#creative-grid");
+  let creativeOpen = false;
+  // Curated block list (skips AIR + non-block items that don't render in the
+  // world: raw food, tools, individual ore blocks would be redundant with
+  // their block-tier versions).
+  const CREATIVE_PALETTE = [
+    B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.SAND, B.WOOD, B.PLANKS, B.BEAM,
+    B.BRICK, B.GLASS, B.WALL_STONE, B.WALL_WOOD, B.ARCH, B.LEAVES,
+    B.IRON_BLOCK, B.GOLD_BLOCK, B.DIAMOND_BLOCK, B.PLATINUM_BLOCK,
+    B.TORCH, B.FIREPLACE, B.CHEST, B.DOOR, B.TRADER,
+    B.SAND, B.SNOW, B.ICE, B.CACTUS, B.SEAGRASS, B.KELP, B.CORAL,
+    B.WATER, B.LAVA,
+    B.MOON_ROCK, B.MOON_DUST, B.MOON_STONE,
+    B.PLATINUM_TROPHY,
+    B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE, B.PLATINUM_ORE,
+    B.PICKAXE_WOOD, B.PICKAXE_STONE, B.PICKAXE_IRON, B.PICKAXE_DIAMOND, B.PICKAXE_PLATINUM,
+    B.RAW_BEEF, B.COOKED_BEEF, B.RAW_FISH, B.COOKED_FISH,
+    B.BUCKET, B.WATER_BUCKET, B.LAVA_BUCKET,
+  ];
+  function buildCreativeGrid() {
+    creativeGrid.innerHTML = "";
+    for (const id of CREATIVE_PALETTE) {
+      const def = BLOCKS[id]; if (!def) continue;
+      const el = document.createElement("div");
+      el.className = "creative-slot";
+      el.title = def.name || "?";
+      const tex = getTexture(id, "side");
+      const src = tex.image.toDataURL?.() || tex.image.src;
+      el.style.backgroundImage = `url(${src})`;
+      el.addEventListener("click", () => {
+        const slot = inv.active ?? 0;
+        inv.hotbar[slot] = id;
+        inv.items[id] = Infinity;
+        if (typeof window.place === "function") window.place();
+        hud.refresh();
+      });
+      creativeGrid.append(el);
+    }
+  }
+  function toggleCreative() {
+    if (!creativeMode) return;
+    creativeOpen = !creativeOpen;
+    creativePanel.classList.toggle("hidden", !creativeOpen);
+    if (creativeOpen) {
+      document.exitPointerLock?.();
+      buildCreativeGrid();
+    } else {
+      showResume();
+    }
+  }
+  $("#creative-close").addEventListener("click", toggleCreative);
 
   // ---- Chest panel ----
   const chestPanel = $("#chest-panel");
@@ -1115,10 +1330,12 @@ async function main() {
       else toggleCraft();
     }
     if (input.justPressed.has("Tab") || input.justPressed.has("KeyI")) toggleInv();
+    if (input.justPressed.has("KeyP")) toggleCreative();
     if (input.justPressed.has("KeyR") && !chestOpen) openNearestChest();
     if (input.justPressed.has("KeyF")) player.toggleFly();
     if (input.justPressed.has("Escape") && chestOpen) closeChest();
     if (input.justPressed.has("Escape") && tradeOpen) closeTrader();
+    if (input.justPressed.has("Escape") && creativeOpen) toggleCreative();
     if (input.justPressed.has("KeyT") && isInRoom() && !chatOpen && !craftOpen && !invOpen && !chestOpen && !tradeOpen) openChat();
 
     if (craftOpen) {
@@ -1153,6 +1370,17 @@ async function main() {
     attackCooldown = Math.max(0, attackCooldown - dt);
 
     player.update(dt, input);
+
+    // Floating origin: snap to a 16-block grid so chunks render near scene
+    // origin. player.update set the camera in world coords; subtract origin
+    // so the camera ends up in scene space too.
+    floatingOrigin.set(
+      Math.round(player.pos.x / 16) * 16,
+      0,
+      Math.round(player.pos.z / 16) * 16,
+    );
+    worldLayer.position.set(-floatingOrigin.x, 0, -floatingOrigin.z);
+    camera.position.sub(floatingOrigin);
 
     // --- SFX: footsteps, mining taps, landing ---
     // Footstep cadence is driven by horizontal distance travelled while
@@ -1208,7 +1436,65 @@ async function main() {
       miningTapAcc = 0;
     }
 
-    dayNight.update(dt, player.pos);
+    dayNight.update(dt, {
+      x: player.pos.x - floatingOrigin.x,
+      y: player.pos.y - floatingOrigin.y,
+      z: player.pos.z - floatingOrigin.z,
+    });
+
+    // --- Underwater / lava fog: applied AFTER DayNight so the sky tint it
+    // sets each frame doesn't clobber our submersion look. When the head is
+    // submerged, swap in a deep tint + pull fog close. Lava submersion is
+    // even thicker so the player can barely see.
+    const headBlock = world.getBlock(
+      Math.floor(player.pos.x),
+      Math.floor(player.pos.y + player.eye),
+      Math.floor(player.pos.z),
+    );
+    if (headBlock === B.WATER) {
+      scene.background.set("#1f4a72");
+      scene.fog.color.set("#1f4a72");
+      scene.fog.near = 1;
+      scene.fog.far = 22;
+    } else if (headBlock === B.LAVA) {
+      scene.background.set("#5a1a08");
+      scene.fog.color.set("#5a1a08");
+      scene.fog.near = 0.5;
+      scene.fog.far = 6;
+    } else {
+      const s = getSettings();
+      scene.fog.near = Math.max(8, s.renderDistance * 8);
+      scene.fog.far = Math.max(40, s.renderDistance * 16 + 8);
+    }
+
+    // --- Moon sky override: no atmosphere on the moon, so force a near-black
+    // starfield regardless of day/night cycle. Done AFTER DayNight + fog
+    // logic so we win every frame.
+    if (world.dimension === "moon" && headBlock !== B.WATER && headBlock !== B.LAVA) {
+      scene.background.set("#050510");
+      scene.fog.color.set("#050510");
+      scene.fog.near = Math.max(20, getSettings().renderDistance * 12);
+      scene.fog.far = Math.max(60, getSettings().renderDistance * 24);
+    }
+
+    // --- Portal trigger: standing in a PORTAL block swaps dimension. The
+    // trip is one-shot per entry (cooldown via inPortal flag) so the player
+    // can stand on the destination portal without bouncing back instantly.
+    portalAcc += dt;
+    if (portalAcc > 0.5) {
+      const footId = world.getBlock(
+        Math.floor(player.pos.x),
+        Math.floor(player.pos.y + 0.5),
+        Math.floor(player.pos.z),
+      );
+      if (footId === B.PORTAL && !inPortal) {
+        inPortal = true;
+        travelDimension();
+      } else if (footId !== B.PORTAL) {
+        inPortal = false;
+      }
+      portalAcc = 0;
+    }
     // Wind ambient: quieter during full day, slightly louder at dawn/dusk
     // and night, so the world feels stiller when the sun is up.
     setAmbient(0.08 + (1 - dayNight.dayFactor()) * 0.08);
@@ -1225,14 +1511,55 @@ async function main() {
     const miningAim = !mobs.raycast(player.eyePos(), player.lookDir(), CONFIG.mining.range + 1);
     const target = mining.update(dt, player, input.mouseDown[0] && miningAim);
     if (input.mouseJust[2] || input.justPressed.has("KeyQ")) placeBlock();
+    if (input.mouseJust[1]) pickBlock();
 
     mobs.update(dt, player.pos);
+
+    // Tick the boss if it exists; clean up once the death anim finishes.
+    if (bossGolem) {
+      const alive = bossGolem.update(dt, player.pos);
+      if (!alive) { bossGolem.remove(); bossGolem = null; }
+    }
+    // Boss HP bar at top of HUD — only visible while the golem is alive.
+    const bossBar = $("#boss-hp-bar");
+    if (bossBar) {
+      if (bossGolem && bossGolem.alive) {
+        bossBar.style.display = "block";
+        const pct = Math.max(0, (bossGolem.health / bossGolem.maxHealth) * 100);
+        const fill = $("#boss-hp-fill");
+        if (fill) fill.style.width = pct + "%";
+        const lbl = $("#boss-hp-label");
+        if (lbl) lbl.textContent = `Moon Rock Golem  ${Math.ceil(bossGolem.health)}/${bossGolem.maxHealth}`;
+      } else {
+        bossBar.style.display = "none";
+      }
+    }
 
     const nowMs = performance.now();
     if (!creativeMode && nowMs - lastHungerTick > 24000) {
       lastHungerTick = nowMs;
       hunger = Math.max(0, hunger - 0.25);
       hud.setHunger(hunger);
+    }
+    // Lava damage: drains hunger fast and respawns the player at zero so a
+    // brief dip is survivable but standing in lava is bad. Creative mode is
+    // immune — same as hunger.
+    if (!creativeMode && player.inLava) {
+      lavaAcc += dt;
+      if (lavaAcc >= 0.4) {
+        lavaAcc = 0;
+        hunger = Math.max(0, hunger - 2);
+        hud.setHunger(hunger);
+        if (typeof window.hurt === "function") window.hurt();
+        if (hunger <= 0) {
+          // Rescue: teleport out and refill a sliver so they don't die twice.
+          player.spawn();
+          hunger = 6;
+          hud.setHunger(hunger);
+        }
+      }
+    } else {
+      lavaAcc = 0;
     }
 
     if (target) {
@@ -1241,6 +1568,7 @@ async function main() {
     } else hud.setTarget(null);
 
     world.update(player.pos.x, player.pos.z);
+    world.tickLiquids();
 
     // Multiplayer: broadcast our position at ~15Hz and lerp remote avatars.
     if (isInRoom()) {

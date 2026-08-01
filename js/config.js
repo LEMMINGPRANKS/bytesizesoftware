@@ -31,7 +31,7 @@ export const CONFIG = {
     iron:    { minDepth: 3,  threshold: 0.74, color: "#7a6a55", freq: 0.16 },
     gold:    { minDepth: 8,  threshold: 0.78, color: "#807038", freq: 0.16 },
     diamond: { minDepth: 14, threshold: 0.82, color: "#5a6868", freq: 0.18 },
-    platinum:{ minDepth: 24, threshold: 0.85, color: "#a8acb0", freq: 0.18 },
+    platinum:{ minDepth: 18, threshold: 0.78, color: "#a8acb0", freq: 0.18 },
   },
   tree: {
     minHeight: 4,

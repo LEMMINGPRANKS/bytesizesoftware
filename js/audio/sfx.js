@@ -257,6 +257,28 @@ export function hurt() {
   noiseHit(0.10, 700, 1.5, 0.42);
 }
 
+// Portal hum: low sine drone with slow vibrato, fades over ~1.2s.
+export function humm() {
+  ensureCtx(); if (muted || !ctx) return;
+  const now = ctx.currentTime;
+  const o = ctx.createOscillator();
+  o.type = "sine";
+  o.frequency.setValueAtTime(110, now);
+  o.frequency.linearRampToValueAtTime(140, now + 0.4);
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = 5;
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.value = 6;
+  lfo.connect(lfoGain).connect(o.frequency);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(0.32, now + 0.1);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
+  o.connect(g).connect(masterGain);
+  o.start(now); lfo.start(now);
+  o.stop(now + 1.3); lfo.stop(now + 1.3);
+}
+
 // Ambient wind: a looping brown-noise bed whose gain gently swells. Started
 // once on game boot and left running — the master gain handles muting. The
 // node graph is built once and modulated, so it costs ~1 BiquadFilter + 1

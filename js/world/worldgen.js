@@ -118,6 +118,9 @@ export function generateChunk(cx, cz, noise, world) {
           const b = noise.noise3(wx * 0.13 + 500, y * 0.13, wz * 0.13 - 500);
           if (a < 0.18 && b < 0.4) id = B.AIR;
         }
+        // Lava pools: low caves near bedrock flood with lava. Risk-reward for
+        // deep mining — diamonds + platinum sit at the same depth.
+        if (id === B.AIR && y <= 6) id = B.LAVA;
         chunk.blocks[chunk.idx(x, y, z)] = id;
       }
 
@@ -127,17 +130,68 @@ export function generateChunk(cx, cz, noise, world) {
       // rise a couple of blocks above sea level in the ice biome for relief.
       if (surface < W.seaLevel) {
         const fillTop = W.seaLevel;
+        const depth = W.seaLevel - surface;
         for (let y = surface + 1; y <= fillTop; y++) {
           const isSurfaceLayer = y >= fillTop - 2;
           chunk.blocks[chunk.idx(x, y, z)] =
             (adjustedBiome === "ice" && isSurfaceLayer) ? B.ICE : B.WATER;
         }
         // Seagrass on the seabed if it's not too deep (≤ 4 blocks of water).
-        if (W.seaLevel - surface <= 4 &&
+        if (depth <= 4 &&
             (chunk.blocks[chunk.idx(x, surface, z)] === B.SAND ||
              chunk.blocks[chunk.idx(x, surface, z)] === B.DIRT) &&
             noise.hash(wx, 29, wz) < 0.08) {
           chunk.blocks[chunk.idx(x, surface + 1, z)] = B.SEAGRASS;
+        }
+        // Kelp forests: tall strands in shallow temperate waters. Each kelp
+        // column is 3-7 blocks tall, anchored to a sand/dirt seabed. Hash
+        // keys on a higher freq so kelp clumps into patches.
+        if (adjustedBiome === "normal" && depth >= 2 && depth <= 8 &&
+            (chunk.blocks[chunk.idx(x, surface, z)] === B.SAND ||
+             chunk.blocks[chunk.idx(x, surface, z)] === B.DIRT) &&
+            noise.hash(wx * 0.6, 71, wz * 0.6) < 0.05) {
+          const kH = 3 + Math.floor(noise.hash(wx, 73, wz) * 5);
+          for (let i = 1; i <= kH && surface + i < W.seaLevel; i++) {
+            chunk.blocks[chunk.idx(x, surface + i, z)] = B.KELP;
+          }
+        }
+        // Coral reefs: warm shallow normal-biome waters only. Sparser than
+        // kelp so reefs read as distinct clusters, not wallpaper.
+        if (adjustedBiome === "normal" && depth >= 1 && depth <= 5 &&
+            chunk.blocks[chunk.idx(x, surface, z)] === B.SAND &&
+            noise.hash(wx * 0.8, 91, wz * 0.8) < 0.025) {
+          chunk.blocks[chunk.idx(x, surface + 1, z)] = B.CORAL;
+        }
+      }
+
+      // ---- Surface lava pools (volcanic patches) ----
+      // Rare surface vents in desert + normal biomes, away from spawn so the
+      // first day isn't "spawn into lava". A coarse hash carves out a small
+      // basin: surrounding ring → COBBLE walls, interior → STONE floor with
+      // LAVA pooling 1-2 blocks below the rim. Continuous with the terrain
+      // so it doesn't look stamped-on.
+      if (surface > W.seaLevel + 2 && distFromSpawn > 80 &&
+          (adjustedBiome === "desert" || adjustedBiome === "normal")) {
+        const volcanoN = noise.height(wx * 0.012 + 1234, wz * 0.012 - 4321, 3);
+        if (volcanoN > 0.86) {
+          // Carve a shallow bowl: deepen the column by 2-3 blocks.
+          const dipDepth = 2 + Math.floor(noise.hash(wx, 5656, wz) * 2);
+          for (let dy = 0; dy < dipDepth; dy++) {
+            chunk.blocks[chunk.idx(x, surface - dy, z)] = B.AIR;
+          }
+          // Floor: stone, then lava on top.
+          const floorY = surface - dipDepth;
+          chunk.blocks[chunk.idx(x, floorY, z)] = B.STONE;
+          if (floorY + 1 < CHUNK_HEIGHT) {
+            chunk.blocks[chunk.idx(x, floorY + 1, z)] = B.LAVA;
+          }
+          // Rim ring: cells that are at the edge of the volcanic patch (per
+          // a slightly wider noise threshold) become raised cobble so the
+          // pool reads as a basin rather than a flat spill.
+          const ringN = noise.height(wx * 0.012 + 1234, wz * 0.012 - 4321, 4);
+          if (ringN > 0.82 && ringN <= volcanoN) {
+            chunk.blocks[chunk.idx(x, surface + 1, z)] = B.COBBLE;
+          }
         }
       }
 
@@ -278,3 +332,61 @@ function surfaceHeightAt(chunk, x, z) {
   }
   return 0;
 }
+
+// ---- Moon dimension generation ----
+// Low rolling grey hills + impact craters + dense platinum veins (it's the
+// moon, after all). No water, no atmosphere — surface is moon_dust on top,
+// moon_rock underneath, moon_stone at depth. Rare lava pockets deep below.
+export function generateMoonChunk(cx, cz, noise) {
+  const chunk = new Chunk(cx, cz);
+  const baseX = cx * CHUNK_SIZE, baseZ = cz * CHUNK_SIZE;
+
+  for (let x = 0; x < CHUNK_SIZE; x++) {
+    for (let z = 0; z < CHUNK_SIZE; z++) {
+      const wx = baseX + x, wz = baseZ + z;
+
+      // Gentle rolling surface.
+      let h = noise.height(wx * 0.01, wz * 0.01, 4);
+      h = Math.floor(20 + (h - 0.5) * 14);
+
+      // Impact craters: scattered depressions. A coarse noise picks crater
+      // centres; the radial profile is bowl-shaped with a raised rim.
+      const cn = noise.height(wx * 0.04 + 777, wz * 0.04 - 333, 3);
+      if (cn > 0.85) {
+        // Bowl depth proportional to noise intensity.
+        const depth = (cn - 0.85) * 80;
+        h = Math.max(8, h - Math.floor(depth));
+      }
+
+      const surface = Math.max(2, Math.min(CHUNK_HEIGHT - 6, h));
+
+      for (let y = 0; y <= surface; y++) {
+        let id;
+        if (y === 0) id = B.BEDROCK;
+        else if (y === surface) id = B.MOON_DUST;
+        else if (y >= surface - 2) id = B.MOON_ROCK;
+        else id = B.MOON_STONE;
+
+        // Abundant platinum veins — much more common than on Earth.
+        if (id === B.MOON_STONE) {
+          const a = noise.noise3(wx * 0.18 + 9, y * 0.18 + 9, wz * 0.18 + 9);
+          const b2 = noise.noise3(wx * 0.4 + 50, y * 0.4 + 50, wz * 0.4 + 50);
+          if (a > 0.4 && b2 > 0.25) id = B.PLATINUM_ORE;
+        }
+
+        // Carved-out caves — fewer, smaller than overworld.
+        if (id === B.MOON_STONE && y < surface - 3 && y > 2) {
+          const a = noise.noise3(wx * 0.06, y * 0.09, wz * 0.06);
+          if (a < 0.12) id = B.AIR;
+        }
+        // Rare deep lava pockets (not the focus, just risk).
+        if (id === B.AIR && y <= 4) id = B.LAVA;
+        chunk.blocks[chunk.idx(x, y, z)] = id;
+      }
+    }
+  }
+
+  chunk.dirty = true;
+  return chunk;
+}
+

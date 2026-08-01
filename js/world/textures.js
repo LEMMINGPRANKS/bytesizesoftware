@@ -438,6 +438,37 @@ function drawTexture(id, face) {
       }
       break;
     }
+    case B.LAVA: {
+      // Bright orange-red with bright cracks + dark crust islands so it
+      // reads as molten, not just a flat red square. Emits light.
+      ctx.fillStyle = "#3a0a04";
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      const grad = ctx.createRadialGradient(SIZE/2, SIZE/2, 4, SIZE/2, SIZE/2, SIZE/1.4);
+      grad.addColorStop(0, "#ffc060");
+      grad.addColorStop(0.4, "#ff5018");
+      grad.addColorStop(1, "#a01800");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      // Dark crust islands for texture.
+      const rng = mulberry(91);
+      ctx.fillStyle = "rgba(40,8,0,0.55)";
+      for (let i = 0; i < 6; i++) {
+        const r = 2 + rng() * 4;
+        ctx.beginPath();
+        ctx.arc(rng() * SIZE, rng() * SIZE, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Bright hairline cracks.
+      ctx.strokeStyle = "rgba(255,220,120,0.7)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(rng() * SIZE, rng() * SIZE);
+        ctx.lineTo(rng() * SIZE, rng() * SIZE);
+        ctx.stroke();
+      }
+      break;
+    }
     case B.SNOW: {
       // Near-white with faint blue speckle for a frosty feel.
       fillNoise(ctx, hexToRgb("#eef2f6"), 6);
@@ -451,6 +482,169 @@ function drawTexture(id, face) {
       ctx.fillRect(7, 0, 2, SIZE);
       ctx.fillStyle = "rgba(180,220,160,0.4)";
       ctx.fillRect(7, 0, 1, SIZE);
+      break;
+    }
+    case B.KELP: {
+      // Tall translucent olive fronds reaching up.
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      const rng = mulberry(11);
+      for (let i = 0; i < 5; i++) {
+        const bx = 2 + ((rng() * (SIZE - 4)) | 0);
+        ctx.strokeStyle = i % 2 ? "#3a5a2a" : "#23451a";
+        ctx.lineWidth = 2 + ((rng() * 2) | 0);
+        ctx.beginPath();
+        let yy = SIZE, x = bx;
+        ctx.moveTo(x, yy);
+        for (let s = 0; s < 10; s++) {
+          yy -= 2;
+          x += Math.sin(s * 0.6 + i) * 1.5;
+          ctx.lineTo(x, yy);
+        }
+        ctx.stroke();
+      }
+      // Small leafy nodules.
+      ctx.fillStyle = "#4a7a2a";
+      for (let i = 0; i < 6; i++) {
+        ctx.fillRect((rng() * SIZE) | 0, (rng() * SIZE) | 0, 2, 1);
+      }
+      break;
+    }
+    case B.CORAL: {
+      // Knobby pink/red coral branches with cream tips.
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      const rng = mulberry(13);
+      const palette = ["#ff7a8a", "#ff5a6a", "#e83a55"];
+      for (let i = 0; i < 4; i++) {
+        const sx = 2 + ((rng() * (SIZE - 4)) | 0);
+        ctx.strokeStyle = palette[i % palette.length];
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sx, SIZE);
+        let x = sx, y = SIZE;
+        for (let s = 0; s < 5; s++) {
+          y -= 3;
+          x += (rng() - 0.5) * 4;
+          ctx.lineTo(x, y);
+          // Side branch.
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + (rng() < 0.5 ? -2 : 2), y - 1);
+          ctx.moveTo(x, y);
+        }
+        ctx.stroke();
+      }
+      // Bright tips.
+      ctx.fillStyle = "#ffe0c0";
+      for (let i = 0; i < 8; i++) {
+        ctx.fillRect((rng() * SIZE) | 0, (rng() * (SIZE - 3)) | 0, 1, 1);
+      }
+      break;
+    }
+    case B.PORTAL: {
+      // Swirly purple vortex with brighter flecks — moon-dimension doorway.
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      const rng = mulberry(17);
+      const grad = ctx.createRadialGradient(SIZE/2, SIZE/2, 1, SIZE/2, SIZE/2, SIZE/1.4);
+      grad.addColorStop(0, "#d0a8ff");
+      grad.addColorStop(0.4, "#7a4ad8");
+      grad.addColorStop(1, "#2a1050");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      // Wispy swirl arcs.
+      ctx.strokeStyle = "rgba(220,200,255,0.55)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 6; i++) {
+        ctx.beginPath();
+        const cx = SIZE/2, cy = SIZE/2;
+        const r = 2 + i * 1.5;
+        const a0 = rng() * Math.PI * 2;
+        ctx.arc(cx + Math.cos(a0) * 1, cy + Math.sin(a0) * 1, r, a0, a0 + Math.PI * 1.4);
+        ctx.stroke();
+      }
+      // Sparkles.
+      ctx.fillStyle = "#ffffff";
+      for (let i = 0; i < 10; i++) {
+        ctx.fillRect((rng() * SIZE) | 0, (rng() * SIZE) | 0, 1, 1);
+      }
+      break;
+    }
+    case B.BUCKET:
+    case B.WATER_BUCKET:
+    case B.LAVA_BUCKET: {
+      // Iron pail with handle. Water/lava versions tint the interior.
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      const wall = id === B.BUCKET ? "#b0b0b0"
+                 : id === B.WATER_BUCKET ? "#88a8d8"
+                 : "#e87850";
+      ctx.fillStyle = wall;
+      // Tapered body: wider at top.
+      ctx.beginPath();
+      ctx.moveTo(3, 4); ctx.lineTo(12, 4);
+      ctx.lineTo(11, 14); ctx.lineTo(4, 14);
+      ctx.closePath(); ctx.fill();
+      // Rim highlight.
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.fillRect(3, 4, 9, 1);
+      // Handle arc.
+      ctx.strokeStyle = "#6a6a6a";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(7.5, 4, 4, Math.PI, 0, false);
+      ctx.stroke();
+      // Interior contents (skip for empty bucket).
+      if (id !== B.BUCKET) {
+        ctx.fillStyle = id === B.WATER_BUCKET ? "#2a5acc" : "#e04020";
+        ctx.fillRect(4, 6, 7, 6);
+        // Shimmer on liquid surface.
+        ctx.fillStyle = id === B.WATER_BUCKET ? "rgba(180,210,255,0.5)"
+                                                : "rgba(255,200,80,0.6)";
+        ctx.fillRect(4, 6, 7, 1);
+      }
+      break;
+    }
+    case B.MOON_ROCK: {
+      // Pitted grey regolith — noise + dark craters.
+      fillNoise(ctx, hexToRgb("#7a7a82"), 30);
+      ctx.fillStyle = "rgba(40,40,50,0.5)";
+      const rng = mulberry(19);
+      for (let i = 0; i < 6; i++) {
+        const cx = (rng() * SIZE) | 0, cy = (rng() * SIZE) | 0;
+        const r = 1 + (rng() * 2) | 0;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      }
+      break;
+    }
+    case B.MOON_DUST: {
+      // Soft pale grey powder.
+      fillNoise(ctx, hexToRgb("#b0b0b8"), 10);
+      specks(ctx, "#888892", 8);
+      break;
+    }
+    case B.MOON_STONE: {
+      // Darker sub-regolith basalt.
+      fillNoise(ctx, hexToRgb("#5a5a62"), 22);
+      specks(ctx, "#3a3a42", 12);
+      break;
+    }
+    case B.PLATINUM_TROPHY: {
+      // Shiny cup on a base — victory trophy.
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      // Base plinth
+      ctx.fillStyle = "#3a2a4a";
+      ctx.fillRect(3, 13, 10, 2);
+      // Stem
+      ctx.fillStyle = "#f0f0f8";
+      ctx.fillRect(7, 9, 2, 4);
+      // Cup bowl
+      ctx.beginPath();
+      ctx.moveTo(4, 4); ctx.lineTo(12, 4); ctx.lineTo(11, 9); ctx.lineTo(5, 9);
+      ctx.closePath(); ctx.fill();
+      // Handles
+      ctx.strokeStyle = "#f0f0f8"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(4, 6, 2, -Math.PI/2, Math.PI/2, false); ctx.stroke();
+      ctx.beginPath(); ctx.arc(12, 6, 2, Math.PI/2, -Math.PI/2, false); ctx.stroke();
+      // Sparkle highlight
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(5, 5, 1, 2);
       break;
     }
     default: fillNoise(ctx, base, 20); break;

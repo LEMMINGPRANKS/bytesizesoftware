@@ -2,11 +2,15 @@
 // and per-frame chunk streaming around the player.
 import * as THREE from "three";
 import { CONFIG } from "../config.js";
-import { generateChunk } from "./worldgen.js";
+import { generateChunk, generateMoonChunk } from "./worldgen.js";
 import { Noise } from "./noise.js";
 import { Chunk, CHUNK_SIZE } from "./chunk.js";
 import { buildChunkMesh } from "./mesher.js";
 import { B, BLOCKS } from "./blocks.js";
+import { tryLightPortal, tryExtinguishPortal } from "./portal.js";
+
+// Max interior height for a portal — used when scanning for broken frames.
+const INTERIOR_H_MAX = 3;
 
 // Trade pool: each entry is {id, count, cost}. Traders roll a small random
 // selection from this list. Costs are in gold-coin units (player pays with
@@ -44,6 +48,11 @@ export class World {
     this.scene = scene;
     this.seed = seed;
     this.noise = new Noise(seed);
+    // Moon has its own noise field derived from a different seed so the
+    // terrain doesn't rhyme with the overworld's — no shared hills/valleys
+    // between dimensions despite using the same Noise class.
+    this.moonNoise = new Noise((seed ^ 0x5f5f5f) | 0);
+    this.dimension = "overworld";
     this.chunks = new Map(); // `${cx},${cz}` -> Chunk
     this.group = new THREE.Group();
     scene.add(this.group);
@@ -53,6 +62,10 @@ export class World {
     this.doors = new Set();      // `${bx},${by},${bz}` (bottom block) of open doors
     this.torches = new Set();    // `${wx},${wy},${wz}` of placed torches
     this.traders = new Map();    // `${wx},${wy},${wz}` -> [{id, count, cost}, ...]
+    // Liquid sim: activeLiquids is the queue of cells to (re)evaluate;
+    // liquidLevels stores the flow distance from a source (0 = source).
+    this.activeLiquids = new Set();
+    this.liquidLevels = new Map();
   }
   static modKey(x, y, z) { return `${x},${y},${z}`; }
   // 27-slot chest inventory at a position, created lazily.
@@ -88,7 +101,9 @@ export class World {
     const k = this.key(cx, cz);
     let c = this.chunks.get(k);
     if (!c) {
-      c = generateChunk(cx, cz, this.noise, this);
+      c = this.dimension === "moon"
+        ? generateMoonChunk(cx, cz, this.moonNoise)
+        : generateChunk(cx, cz, this.noise, this);
       this.chunks.set(k, c);
       // Replay any player edits that land inside this chunk.
       if (this.modified.size) {
@@ -128,6 +143,12 @@ export class World {
     const lx = wx - cx * CHUNK_SIZE, lz = wz - cz * CHUNK_SIZE;
     return c.get(lx, wy, lz);
   }
+  // Internal: read a block without the early-return for chunkHeight, used by
+  // the liquid sim so it can probe just below y=0 safely.
+  _blockAt(wx, wy, wz) {
+    if (wy < 0) return B.BEDROCK; // treat below-world as solid so liquids don't drain out the bottom
+    return this.getBlock(wx, wy, wz);
+  }
 
   setBlock(wx, wy, wz, v) {
     if (wy < 0 || wy >= CONFIG.world.chunkHeight) return;
@@ -135,6 +156,24 @@ export class World {
     const c = this.ensureChunk(cx, cz);
     const lx = wx - cx * CHUNK_SIZE, lz = wz - cz * CHUNK_SIZE;
     const k = World.modKey(wx, wy, wz);
+    const prev = c.get(lx, wy, lz);
+    // Queue liquid-spread checks for any adjacent liquid blocks whenever a
+    // cell changes — covers "break block next to water" and "place block in
+    // ocean" without needing the caller to know about fluid sim.
+    if (prev !== v) {
+      const NB = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+      for (const [dx, dy, dz] of NB) {
+        const nb = this._blockAt(wx + dx, wy + dy, wz + dz);
+        if (nb === B.WATER || nb === B.LAVA) {
+          this.activeLiquids.add(`${wx+dx},${wy+dy},${wz+dz}`);
+        }
+      }
+      // If we just removed a flowing-liquid block, re-check its supporters.
+      if (prev === B.WATER || prev === B.LAVA) {
+        this.activeLiquids.add(`${wx},${wy},${wz}`);
+        this.liquidLevels.delete(k);
+      }
+    }
     // Keep the torch index in sync with player edits so the light pool can
     // find them quickly without scanning the whole modified map each frame.
     const emits = v !== B.AIR && BLOCKS[v] && BLOCKS[v].light;
@@ -142,11 +181,110 @@ export class World {
     else if (this.torches.has(k)) this.torches.delete(k);
     c.set(lx, wy, lz, v);
     this.modified.set(k, v);
+    // Portal hooks: placing LAVA inside a platinum frame lights the portal;
+    // breaking a frame block extinguishes any portal that depended on it.
+    if (v === B.LAVA) {
+      if (tryLightPortal(this, wx, wy, wz)) {
+        // Portal fill dirties the chunk for us; just flag neighbours below.
+      }
+    }
+    if (prev === B.PLATINUM_BLOCK && v !== B.PLATINUM_BLOCK) {
+      // Search the 3×3 neighbourhood for any PORTAL block whose frame is now
+      // broken and extinguish it.
+      for (let dx = -1; dx <= 1; dx++)
+        for (let dy = -INTERIOR_H_MAX; dy <= 1; dy++)
+          for (let dz = -1; dz <= 1; dz++) {
+            if (this.getBlock(wx + dx, wy + dy, wz + dz) === B.PORTAL) {
+              tryExtinguishPortal(this, wx + dx, wy + dy, wz + dz);
+            }
+          }
+    }
     // mark neighbours dirty if on border
     if (lx === 0) { const n = this.getChunk(cx - 1, cz); if (n) n.dirty = true; }
     if (lx === CHUNK_SIZE - 1) { const n = this.getChunk(cx + 1, cz); if (n) n.dirty = true; }
     if (lz === 0) { const n = this.getChunk(cx, cz - 1); if (n) n.dirty = true; }
     if (lz === CHUNK_SIZE - 1) { const n = this.getChunk(cx, cz + 1); if (n) n.dirty = true; }
+  }
+
+  // Process the liquid-sim queue. Throttled by budget per call so a sudden
+  // flood (e.g. breaking a sea wall) doesn't lock the frame. Rules:
+  //   * Source (level 0) = generated ocean/lake water OR formed by 2+ horizontal
+  //     source neighbours (infinite-source trick).
+  //   * Liquid flows down forever (falling water creates source below if the
+  //     cell above is a source, else flowing water with level+1).
+  //   * Horizontal spread: flowing water at level N spreads to side air as
+  //     level N+1. Capped at MAX_LEVEL.
+  //   * Removing a liquid's support causes downstream blocks to dry up.
+  tickLiquids() {
+    if (this.activeLiquids.size === 0) return;
+    const MAX_LEVEL = 7;
+    let budget = 24;
+    const next = new Set();
+    // Snapshot so setBlock mutations during the loop don't perturb iteration.
+    const queue = Array.from(this.activeLiquids);
+    this.activeLiquids.clear();
+    for (const key of queue) {
+      if (budget-- <= 0) { next.add(key); continue; }
+      const [x, y, z] = key.split(",").map(Number);
+      const id = this._blockAt(x, y, z);
+      if (id !== B.WATER && id !== B.LAVA) {
+        // Block is no longer liquid — cascade: recheck neighbours which may
+        // have been relying on it as a source.
+        for (const [dx, dy, dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]) {
+          const nb = this._blockAt(x+dx, y+dy, z+dz);
+          if (nb === B.WATER || nb === B.LAVA) next.add(`${x+dx},${y+dy},${z+dz}`);
+        }
+        continue;
+      }
+      const k = World.modKey(x, y, z);
+      const isLava = id === B.LAVA;
+      // Determine current level
+      let level = this.liquidLevels.has(k) ? this.liquidLevels.get(k) : 0;
+      // Source check: count horizontal+below source neighbours.
+      const below = this._blockAt(x, y - 1, z);
+      const isBelowSolid = below !== B.AIR && below !== B.WATER && below !== B.LAVA;
+      // Source if: this is a generated lake block (level undefined and has
+      // water on at least 2 horizontal sides or solid below + water above),
+      // OR it has 2+ horizontal source neighbours (infinite-source).
+      let horizSources = 0;
+      for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nk = World.modKey(x+dx, y, z+dz);
+        const nb = this._blockAt(x+dx, y, z+dz);
+        if (nb === id && !this.liquidLevels.has(nk)) horizSources++;
+      }
+      if (level !== 0 && horizSources >= 2) {
+        // Promote to source — infinite water-source rule.
+        this.liquidLevels.delete(k);
+        level = 0;
+      }
+      const isSource = level === 0;
+      // Flow down.
+      if (below === B.AIR) {
+        this.setBlock(x, y - 1, z, id);
+        if (!isSource) this.liquidLevels.set(World.modKey(x, y - 1, z), level + 1);
+        next.add(`${x},${y - 1},${z}`);
+      }
+      // Flow sideways (only sources or first-level flow spreads horizontally
+      // — this matches roughly how Minecraft throttles spread).
+      if (isSource || level < MAX_LEVEL) {
+        for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          const sx = x + dx, sz = z + dz;
+          const side = this._blockAt(sx, y, sz);
+          if (side === B.AIR) {
+            this.setBlock(sx, y, sz, id);
+            this.liquidLevels.set(World.modKey(sx, y, sz), isSource ? 1 : level + 1);
+            next.add(`${sx},${y},${sz}`);
+          } else if (side === id) {
+            // Refresh neighbour so it can re-evaluate its own level.
+            next.add(`${sx},${y},${sz}`);
+          }
+        }
+      }
+      // Lava is sluggish — only process half as often (caller throttles).
+    }
+    // Merge anything setBlock queued during this pass into the next round.
+    for (const k of this.activeLiquids) next.add(k);
+    this.activeLiquids = next;
   }
 
   // Update which chunks exist & are meshed around player position.
@@ -185,6 +323,21 @@ export class World {
         this.chunks.delete(k);
       }
     }
+  }
+
+  // Switch dimension and tear down every loaded chunk so they regenerate
+  // from the new worldgen function on next ensureChunk. Player-modified
+  // blocks (this.modified) are preserved so builds survive the trip; chest
+  // contents, door state, etc. are kept too.
+  switchDimension(dim) {
+    this.dimension = dim;
+    for (const [, c] of this.chunks) {
+      if (c.mesh) { this.group.remove(c.mesh); c.mesh.traverse(o => o.geometry?.dispose?.()); }
+      if (c.transparentMesh) { this.group.remove(c.transparentMesh); c.transparentMesh.traverse(o => o.geometry?.dispose?.()); }
+    }
+    this.chunks.clear();
+    this.activeLiquids.clear();
+    this.liquidLevels.clear();
   }
 
   // Highest non-air, non-liquid block at column.

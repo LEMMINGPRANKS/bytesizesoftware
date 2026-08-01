@@ -178,11 +178,14 @@ export function buildChunkMesh(chunk, world) {
           addDoor(transparent, x, y, z, id, isOpen);
           continue;
         }
-        if (id === B.SEAGRASS) {
+        if (id === B.SEAGRASS || id === B.KELP || id === B.CORAL) {
           // Crossed blades + waterlogged cube faces (so it doesn't look like
           // an air bubble). Render water faces that abut AIR or non-water
           // transparent neighbours; skip faces touching other water.
-          addCross(transparent, x, y, z, id, 0.45, 1.0);
+          // Kelp is taller (full cube), coral is bushier, seagrass short.
+          const w = id === B.KELP ? 0.5 : id === B.CORAL ? 0.55 : 0.45;
+          const h = id === B.KELP ? 1.0 : id === B.CORAL ? 0.9 : 1.0;
+          addCross(transparent, x, y, z, id, w, h);
           for (let f = 0; f < 6; f++) {
             const face = FACES[f];
             const nx = x + face.dir[0], ny = y + face.dir[1], nz = z + face.dir[2];

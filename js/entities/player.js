@@ -90,6 +90,7 @@ export class Player {
       Math.floor(this.pos.x), Math.floor(this.pos.y + 0.1), Math.floor(this.pos.z)
     );
     this.inWater = isLiquid(headBlock) || isLiquid(feetBlock);
+    this.inLava = headBlock === B.LAVA || feetBlock === B.LAVA;
 
     // Movement input
     const fwd = (input.keys.has("KeyW") ? 1 : 0) - (input.keys.has("KeyS") ? 1 : 0);

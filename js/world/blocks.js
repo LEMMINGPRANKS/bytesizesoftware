@@ -17,6 +17,17 @@ export const B = {
   ICE: 42,
   CACTUS: 43,
   SNOW: 44,
+  LAVA: 45,
+  KELP: 46,
+  CORAL: 47,
+  PORTAL: 48,
+  BUCKET: 49,
+  WATER_BUCKET: 50,
+  LAVA_BUCKET: 51,
+  MOON_ROCK: 52,
+  MOON_DUST: 53,
+  MOON_STONE: 54,
+  PLATINUM_TROPHY: 55,
 };
 
 export const BLOCKS = {
@@ -67,6 +78,17 @@ export const BLOCKS = {
   [B.ICE]:   { name: "ice",   solid: true,  hardness: 0.6, color: "#9cc4d8", transparent: true },
   [B.CACTUS]:{ name: "cactus",solid: true,  hardness: 0.4, color: "#3a7a3a" },
   [B.SNOW]:  { name: "snow",  solid: true,  hardness: 0.3, color: "#eef2f6" },
+  [B.LAVA]:  { name: "lava", solid: false, hardness: Infinity, color: "#e04020", transparent: true, liquid: true, light: 15, damage: 4 },
+  [B.KELP]:  { name: "kelp", solid: false, hardness: 0.1, color: "#2a4a1a", transparent: true, decor: true },
+  [B.CORAL]: { name: "coral", solid: false, hardness: 0.2, color: "#ff7a8a", transparent: true, decor: true },
+  [B.PORTAL]: { name: "portal", solid: false, hardness: Infinity, color: "#a070ff", transparent: true, liquid: false, light: 11, portal: true },
+  [B.BUCKET]:       { name: "bucket",       solid: false, hardness: 0.1, color: "#a0a0a0", item: true, bucket: true, empty: true },
+  [B.WATER_BUCKET]: { name: "water_bucket", solid: false, hardness: 0.1, color: "#3a6acc", item: true, bucket: true, contains: "WATER" },
+  [B.LAVA_BUCKET]:  { name: "lava_bucket",  solid: false, hardness: 0.1, color: "#e04020", item: true, bucket: true, contains: "LAVA" },
+  [B.MOON_ROCK]:   { name: "moon_rock",   solid: true, hardness: 2.5, color: "#7a7a82", toolTier: 1 },
+  [B.MOON_DUST]:   { name: "moon_dust",   solid: true, hardness: 0.4, color: "#b0b0b8" },
+  [B.MOON_STONE]:  { name: "moon_stone",  solid: true, hardness: 3.0, color: "#5a5a62", toolTier: 2 },
+  [B.PLATINUM_TROPHY]: { name: "platinum_trophy", solid: true, hardness: 1.5, color: "#f0f0f8", light: 12, decor: true, trophy: true },
 };
 
 export const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;

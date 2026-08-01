@@ -43,6 +43,14 @@ export function createRenderer(canvas) {
   const hemi = new THREE.HemisphereLight("#bfe3ff", "#5a4a2a", 0.4);
   scene.add(hemi);
 
+  // Floating origin: world content (chunks, mobs, items) lives in this group,
+  // which is shifted so the player stays near scene-space (0,0,0). Keeps
+  // float32 precision high no matter how far the player walks in world coords.
+  // Lights/camera live directly in scene and are positioned relative to the
+  // player each frame.
+  const worldLayer = new THREE.Group();
+  scene.add(worldLayer);
+
   function onResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -50,5 +58,5 @@ export function createRenderer(canvas) {
   }
   window.addEventListener("resize", onResize);
 
-  return { renderer, scene, camera, sun, ambient, hemi };
+  return { renderer, scene, camera, sun, ambient, hemi, worldLayer };
 }

@@ -23,6 +23,7 @@ export const RECIPES = [
   { out: [B.PICKAXE_IRON, 1],     in: [{ id: B.IRON_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }],        name: "Iron Pickaxe (mines diamond)" },
   { out: [B.PICKAXE_DIAMOND, 1],  in: [{ id: B.DIAMOND_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }],     name: "Diamond Pickaxe (mines platinum)" },
   { out: [B.PICKAXE_PLATINUM, 1], in: [{ id: B.PLATINUM_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }],    name: "Platinum Pickaxe (best — mines everything)" },
+  { out: [B.BUCKET, 1], in: [{ id: B.IRON_BLOCK, count: 1 }], name: "Bucket (pick up & place water/lava)" },
 ];
 
 // Tool tier hints (informational): wood < stone < iron < gold < diamond < platinum.
