@@ -183,8 +183,17 @@ export function sendPlayerState(pos, yaw, pitch) {
   });
 }
 export function sendChat(text) {
-  if (!inRoom) return;
-  client.raiseEvent(EVENT_CODES.CHAT, { text });
+  if (!inRoom || !client) return;
+  try {
+    // Chat is rare + important — send reliably so a flaky connection doesn't
+    // drop a message silently. Wrap in try/catch because some Photon builds
+    // throw synchronously if the room is in a weird state mid-join.
+    const LBC = window.Photon?.LoadBalancing?.LoadBalancingClient;
+    const opts = LBC ? { receivers: LBC.ReceiverGroup.All, cache: LBC.EventCache.DoNotCache } : {};
+    client.raiseEvent(EVENT_CODES.CHAT, { text: String(text || "").slice(0, 120) }, opts);
+  } catch (e) {
+    callbacks.onError?.(`Chat send failed: ${e.message || e}`);
+  }
 }
 
 // Host → newcomer: stream the modified-block delta so a fresh joiner sees the
@@ -197,19 +206,31 @@ export function sendWorldDump(entries, seq, done) {
 
 export function actorName(actorNr) {
   if (!client) return `Player ${actorNr}`;
-  const a = client.myRoom().getActor(actorNr);
-  return a?.name || `Player ${actorNr}`;
+  try {
+    const room = client.myRoom();
+    if (!room) return `Player ${actorNr}`;
+    const a = room.getActor(actorNr);
+    return a?.name || `Player ${actorNr}`;
+  } catch {
+    return `Player ${actorNr}`;
+  }
 }
 
 // ---- Incoming event dispatch ----
 function handleEvent(code, data, actorNr) {
-  if (code === EVENT_CODES.BLOCK_EDIT) {
-    callbacks.onRemoteBlockEdit?.(data, actorNr);
-  } else if (code === EVENT_CODES.PLAYER_STATE) {
-    callbacks.onRemotePlayerState?.(data, actorNr);
-  } else if (code === EVENT_CODES.CHAT) {
-    callbacks.onRemoteChat?.(data?.text, actorNr);
-  } else if (code === EVENT_CODES.WORLD_DUMP) {
-    callbacks.onRemoteWorldDump?.(data, actorNr);
+  try {
+    if (code === EVENT_CODES.BLOCK_EDIT) {
+      callbacks.onRemoteBlockEdit?.(data, actorNr);
+    } else if (code === EVENT_CODES.PLAYER_STATE) {
+      callbacks.onRemotePlayerState?.(data, actorNr);
+    } else if (code === EVENT_CODES.CHAT) {
+      callbacks.onRemoteChat?.(data?.text, actorNr);
+    } else if (code === EVENT_CODES.WORLD_DUMP) {
+      callbacks.onRemoteWorldDump?.(data, actorNr);
+    }
+  } catch (e) {
+    // Defensive: a malformed payload or missing callback shouldn't take down
+    // the whole event loop. Log it and carry on.
+    callbacks.onError?.(`Event ${code} handler failed: ${e?.message || e}`);
   }
 }
