@@ -59238,6 +59238,8 @@ async function main() {
       chests: Object.fromEntries(world.chests),
       doors: Array.from(world.doors),
       traders: Object.fromEntries(world.traders),
+      levers: Array.from(world.levers),
+      pistons: Array.from(world.pistons.entries()).map(([k, v]) => [k, v]),
     };
   }
 
@@ -59888,6 +59890,17 @@ async function main() {
     }
     if (saved && saved.traders) {
       for (const [k, v] of Object.entries(saved.traders)) world.traders.set(k, v);
+    }
+    if (saved && saved.levers) {
+      for (const k of saved.levers) world.levers.add(k);
+      world.powerDirty = true;
+    }
+    if (saved && saved.pistons) {
+      for (const [k, v] of saved.pistons) {
+        if (v && Array.isArray(v.facing) && v.facing.length === 3) {
+          world.pistons.set(k, { facing: v.facing, sticky: !!v.sticky });
+        }
+      }
     }
     // Rebuild the torch index from persisted block edits so the light pool
     // works immediately on load.
