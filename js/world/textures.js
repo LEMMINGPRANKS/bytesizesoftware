@@ -378,6 +378,35 @@ function drawTexture(id, face) {
       ctx.fillRect(12, 5, 1, 1);
       break;
     }
+    case B.SHOVEL_WOOD:
+    case B.SHOVEL_STONE:
+    case B.SHOVEL_IRON:
+    case B.SHOVEL_DIAMOND:
+    case B.SHOVEL_PLATINUM: {
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      const head = baseColor || "#888";
+      // Handle (wood)
+      ctx.strokeStyle = "#6a4a2a";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(3, 13);
+      ctx.lineTo(13, 3);
+      ctx.stroke();
+      // Shovel head — spade shape (wider than pick, single scoop).
+      ctx.fillStyle = head;
+      ctx.beginPath();
+      ctx.moveTo(10, 4);
+      ctx.lineTo(14, 5);
+      ctx.lineTo(13, 11);
+      ctx.lineTo(10, 12);
+      ctx.lineTo(9, 7);
+      ctx.closePath();
+      ctx.fill();
+      // Highlight on scoop.
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.fillRect(11, 5, 1, 2);
+      break;
+    }
     case B.WATER: {
       ctx.clearRect(0, 0, SIZE, SIZE);
       // Depth gradient: lighter near surface, darker depths.
@@ -647,6 +676,89 @@ function drawTexture(id, face) {
       ctx.fillRect(5, 5, 1, 2);
       break;
     }
+    case B.WIRE: {
+      // Flat red wire cross — the mesher draws multiple rotated copies to
+      // build dot/line/T/cross shapes depending on neighbours.
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      const on = face === "powered";
+      const wire = on ? "#ff2020" : "#a01010";
+      const glow = on ? "#ffa040" : "#601010";
+      // Central node
+      ctx.fillStyle = wire;
+      ctx.fillRect(SIZE/2 - 2, SIZE/2 - 2, 4, 4);
+      // Arms extending to each edge.
+      ctx.fillRect(SIZE/2 - 1, 0, 2, SIZE/2);
+      ctx.fillRect(SIZE/2 - 1, SIZE/2, 2, SIZE/2);
+      ctx.fillRect(0, SIZE/2 - 1, SIZE/2, 2);
+      ctx.fillRect(SIZE/2, SIZE/2 - 1, SIZE/2, 2);
+      // Glow highlight down the middle of each arm.
+      ctx.fillStyle = glow;
+      ctx.fillRect(SIZE/2, 2, 1, SIZE/2 - 2);
+      ctx.fillRect(SIZE/2, SIZE/2 + 1, 1, SIZE/2 - 3);
+      ctx.fillRect(2, SIZE/2, SIZE/2 - 2, 1);
+      ctx.fillRect(SIZE/2 + 1, SIZE/2, SIZE/2 - 3, 1);
+      break;
+    }
+    case B.LEVER: {
+      // Wooden base plate + a stick that tilts (drawn neutral; the mesher
+      // rotates based on the face it's mounted to).
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      ctx.fillStyle = "#6a4a2a";
+      ctx.fillRect(3, 10, 10, 3);
+      ctx.fillStyle = "#8a6a3a";
+      ctx.fillRect(4, 11, 8, 1);
+      ctx.strokeStyle = "#c0c0c0";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(SIZE/2, 10); ctx.lineTo(SIZE/2 + 4, 3);
+      ctx.stroke();
+      ctx.fillStyle = "#c0c0c0";
+      ctx.fillRect(SIZE/2 + 3, 2, 3, 3);
+      break;
+    }
+    case B.LAMP: {
+      // Lantern-style lamp — gold rim, pale centre. Two variants via face.
+      const on = face === "powered";
+      ctx.fillStyle = on ? "#fff0a0" : "#666670";
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      ctx.fillStyle = on ? "#ffe060" : "#3a3a44";
+      ctx.fillRect(2, 2, SIZE - 4, SIZE - 4);
+      ctx.fillStyle = on ? "#ffffd0" : "#2a2a32";
+      ctx.fillRect(5, 5, SIZE - 10, SIZE - 10);
+      ctx.strokeStyle = on ? "#ff9020" : "#1a1a22";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0.5, 0.5, SIZE - 1, SIZE - 1);
+      break;
+    }
+    case B.GRANITE: {
+      // Pink-tinged coarse stone with dark speckles.
+      fillNoise(ctx, hexToRgb("#9a5a4a"), 28);
+      specks(ctx, "#3a1a10", 18);
+      specks(ctx, "#d0a090", 8);
+      break;
+    }
+    case B.MARBLE: {
+      // Pale stone with sweeping dark veins.
+      fillNoise(ctx, hexToRgb("#e8e4d8"), 10);
+      ctx.strokeStyle = "rgba(60,60,80,0.55)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, 4 + i * 8);
+        for (let x = 0; x <= SIZE; x += 2) {
+          ctx.lineTo(x, 4 + i * 8 + Math.sin(x * 0.6 + i) * 2);
+        }
+        ctx.stroke();
+      }
+      break;
+    }
+    case B.BASALT: {
+      // Very dark volcanic stone with subtle grey mottling.
+      fillNoise(ctx, hexToRgb("#2a2a32"), 24);
+      specks(ctx, "#1a1a22", 16);
+      specks(ctx, "#4a4a55", 6);
+      break;
+    }
     default: fillNoise(ctx, base, 20); break;
   }
   const tex = new THREE.CanvasTexture(c);
@@ -731,6 +843,7 @@ const slotIndex = new Map();        // `${id}:${face}` -> tileIndex 0..255
 let nextSlot = 0;
 
 function faceName(idx) {
+  if (typeof idx === "string") return idx;
   return idx === 2 ? "top" : idx === 3 ? "bottom" : "side";
 }
 

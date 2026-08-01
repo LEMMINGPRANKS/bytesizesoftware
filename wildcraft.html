@@ -54151,6 +54151,17 @@ const B = {
   MOON_DUST: 53,
   MOON_STONE: 54,
   PLATINUM_TROPHY: 55,
+  WIRE: 56,
+  LEVER: 57,
+  LAMP: 58,
+  GRANITE: 59,
+  MARBLE: 60,
+  BASALT: 61,
+  SHOVEL_WOOD: 62,
+  SHOVEL_STONE: 63,
+  SHOVEL_IRON: 64,
+  SHOVEL_DIAMOND: 65,
+  SHOVEL_PLATINUM: 66,
 };
 
 const BLOCKS = {
@@ -54212,6 +54223,17 @@ const BLOCKS = {
   [B.MOON_DUST]:   { name: "moon_dust",   solid: true, hardness: 0.4, color: "#b0b0b8" },
   [B.MOON_STONE]:  { name: "moon_stone",  solid: true, hardness: 3.0, color: "#5a5a62", toolTier: 2 },
   [B.PLATINUM_TROPHY]: { name: "platinum_trophy", solid: true, hardness: 1.5, color: "#f0f0f8", light: 12, decor: true, trophy: true },
+  [B.WIRE]:  { name: "wire",  solid: false, hardness: 0.1, color: "#cc1010", transparent: true, decor: true, wire: true },
+  [B.LEVER]: { name: "lever", solid: false, hardness: 0.3, color: "#7a5a3a", transparent: true, decor: true, interactive: true, lever: true, source: true },
+  [B.LAMP]:  { name: "lamp",  solid: true,  hardness: 0.6, color: "#888888", transparent: false, lamp: true, receiver: true },
+  [B.GRANITE]: { name: "granite", solid: true, hardness: 1.7, color: "#9a5a4a", toolTier: 1 },
+  [B.MARBLE]:  { name: "marble",  solid: true, hardness: 1.5, color: "#e8e4d8" },
+  [B.BASALT]:  { name: "basalt",  solid: true, hardness: 2.2, color: "#2a2a32", toolTier: 1 },
+  [B.SHOVEL_WOOD]:     { name: "shovel_wood",     solid: false, hardness: 0.1, color: "#a07a3a", item: true, tool: "shovel", toolTier: 1 },
+  [B.SHOVEL_STONE]:    { name: "shovel_stone",    solid: false, hardness: 0.1, color: "#9a9a9a", item: true, tool: "shovel", toolTier: 2 },
+  [B.SHOVEL_IRON]:     { name: "shovel_iron",     solid: false, hardness: 0.1, color: "#dcdcdc", item: true, tool: "shovel", toolTier: 3 },
+  [B.SHOVEL_DIAMOND]:  { name: "shovel_diamond",  solid: false, hardness: 0.1, color: "#8af6ff", item: true, tool: "shovel", toolTier: 4 },
+  [B.SHOVEL_PLATINUM]: { name: "shovel_platinum", solid: false, hardness: 0.1, color: "#f0f0f8", item: true, tool: "shovel", toolTier: 5 },
 };
 
 const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;
@@ -54662,6 +54684,35 @@ function drawTexture(id, face) {
       ctx.fillRect(12, 5, 1, 1);
       break;
     }
+    case B.SHOVEL_WOOD:
+    case B.SHOVEL_STONE:
+    case B.SHOVEL_IRON:
+    case B.SHOVEL_DIAMOND:
+    case B.SHOVEL_PLATINUM: {
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      const head = baseColor || "#888";
+      // Handle (wood)
+      ctx.strokeStyle = "#6a4a2a";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(3, 13);
+      ctx.lineTo(13, 3);
+      ctx.stroke();
+      // Shovel head — spade shape (wider than pick, single scoop).
+      ctx.fillStyle = head;
+      ctx.beginPath();
+      ctx.moveTo(10, 4);
+      ctx.lineTo(14, 5);
+      ctx.lineTo(13, 11);
+      ctx.lineTo(10, 12);
+      ctx.lineTo(9, 7);
+      ctx.closePath();
+      ctx.fill();
+      // Highlight on scoop.
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.fillRect(11, 5, 1, 2);
+      break;
+    }
     case B.WATER: {
       ctx.clearRect(0, 0, SIZE, SIZE);
       // Depth gradient: lighter near surface, darker depths.
@@ -54931,6 +54982,89 @@ function drawTexture(id, face) {
       ctx.fillRect(5, 5, 1, 2);
       break;
     }
+    case B.WIRE: {
+      // Flat red wire cross — the mesher draws multiple rotated copies to
+      // build dot/line/T/cross shapes depending on neighbours.
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      const on = face === "powered";
+      const wire = on ? "#ff2020" : "#a01010";
+      const glow = on ? "#ffa040" : "#601010";
+      // Central node
+      ctx.fillStyle = wire;
+      ctx.fillRect(SIZE/2 - 2, SIZE/2 - 2, 4, 4);
+      // Arms extending to each edge.
+      ctx.fillRect(SIZE/2 - 1, 0, 2, SIZE/2);
+      ctx.fillRect(SIZE/2 - 1, SIZE/2, 2, SIZE/2);
+      ctx.fillRect(0, SIZE/2 - 1, SIZE/2, 2);
+      ctx.fillRect(SIZE/2, SIZE/2 - 1, SIZE/2, 2);
+      // Glow highlight down the middle of each arm.
+      ctx.fillStyle = glow;
+      ctx.fillRect(SIZE/2, 2, 1, SIZE/2 - 2);
+      ctx.fillRect(SIZE/2, SIZE/2 + 1, 1, SIZE/2 - 3);
+      ctx.fillRect(2, SIZE/2, SIZE/2 - 2, 1);
+      ctx.fillRect(SIZE/2 + 1, SIZE/2, SIZE/2 - 3, 1);
+      break;
+    }
+    case B.LEVER: {
+      // Wooden base plate + a stick that tilts (drawn neutral; the mesher
+      // rotates based on the face it's mounted to).
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      ctx.fillStyle = "#6a4a2a";
+      ctx.fillRect(3, 10, 10, 3);
+      ctx.fillStyle = "#8a6a3a";
+      ctx.fillRect(4, 11, 8, 1);
+      ctx.strokeStyle = "#c0c0c0";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(SIZE/2, 10); ctx.lineTo(SIZE/2 + 4, 3);
+      ctx.stroke();
+      ctx.fillStyle = "#c0c0c0";
+      ctx.fillRect(SIZE/2 + 3, 2, 3, 3);
+      break;
+    }
+    case B.LAMP: {
+      // Lantern-style lamp — gold rim, pale centre. Two variants via face.
+      const on = face === "powered";
+      ctx.fillStyle = on ? "#fff0a0" : "#666670";
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      ctx.fillStyle = on ? "#ffe060" : "#3a3a44";
+      ctx.fillRect(2, 2, SIZE - 4, SIZE - 4);
+      ctx.fillStyle = on ? "#ffffd0" : "#2a2a32";
+      ctx.fillRect(5, 5, SIZE - 10, SIZE - 10);
+      ctx.strokeStyle = on ? "#ff9020" : "#1a1a22";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0.5, 0.5, SIZE - 1, SIZE - 1);
+      break;
+    }
+    case B.GRANITE: {
+      // Pink-tinged coarse stone with dark speckles.
+      fillNoise(ctx, hexToRgb("#9a5a4a"), 28);
+      specks(ctx, "#3a1a10", 18);
+      specks(ctx, "#d0a090", 8);
+      break;
+    }
+    case B.MARBLE: {
+      // Pale stone with sweeping dark veins.
+      fillNoise(ctx, hexToRgb("#e8e4d8"), 10);
+      ctx.strokeStyle = "rgba(60,60,80,0.55)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, 4 + i * 8);
+        for (let x = 0; x <= SIZE; x += 2) {
+          ctx.lineTo(x, 4 + i * 8 + Math.sin(x * 0.6 + i) * 2);
+        }
+        ctx.stroke();
+      }
+      break;
+    }
+    case B.BASALT: {
+      // Very dark volcanic stone with subtle grey mottling.
+      fillNoise(ctx, hexToRgb("#2a2a32"), 24);
+      specks(ctx, "#1a1a22", 16);
+      specks(ctx, "#4a4a55", 6);
+      break;
+    }
     default: fillNoise(ctx, base, 20); break;
   }
   const tex = new THREE.CanvasTexture(c);
@@ -55015,6 +55149,7 @@ const slotIndex = new Map();        // `${id}:${face}` -> tileIndex 0..255
 let nextSlot = 0;
 
 function faceName(idx) {
+  if (typeof idx === "string") return idx;
   return idx === 2 ? "top" : idx === 3 ? "bottom" : "side";
 }
 
@@ -55570,6 +55705,41 @@ function addCross(layer, x, y, z, id, w, h) {
   }
 }
 
+// Flat redstone-style wire. Renders as a thin quad lying on top of the
+// support block. Each of the 4 cardinal directions gets its own arm quad
+// when the neighbour cell also contains WIRE, so two adjacent wires read
+// as a connected line (and three / four as T / cross).
+function addWire(layer, x, y, z, wx, wy, wz, world) {
+  const powered = world.isPowered(wx, wy, wz);
+  const [u0, v0, u1, v1] = atlasUV(B.WIRE, powered ? "powered" : "side");
+  const yTop = y + 0.02; // float just above the floor to avoid z-fighting
+  // Central node: small flat square in the middle of the cell.
+  const cx = x + 0.5, cz = z + 0.5;
+  const r = 0.18;
+  _pushFlatQuad(layer, cx - r, cz - r, cx + r, cz + r, yTop, u0, v0, u1, v1);
+  // Arms toward each connected neighbour. Half-thickness so the wire reads
+  // as a single line crossing the edge.
+  const arms = [
+    { dir: [-1, 0],  x0: cx - 0.5, z0: cz - r, x1: cx,     z1: cz + r },
+    { dir: [ 1, 0],  x0: cx,       z0: cz - r, x1: cx + 0.5, z1: cz + r },
+    { dir: [ 0,-1],  x0: cx - r,   z0: cz - 0.5, x1: cx + r, z1: cz },
+    { dir: [ 0, 1],  x0: cx - r,   z0: cz,     x1: cx + r, z1: cz + 0.5 },
+  ];
+  for (const a of arms) {
+    const nb = world.getBlock(wx + a.dir[0], wy, wz + a.dir[1]);
+    if (nb === B.WIRE || nb === B.LEVER || nb === B.LAMP) {
+      _pushFlatQuad(layer, a.x0, a.z0, a.x1, a.z1, yTop, u0, v0, u1, v1);
+    }
+  }
+}
+function _pushFlatQuad(layer, x0, z0, x1, z1, y, u0, v0, u1, v1) {
+  const vIdx = layer.positions.length / 3;
+  layer.positions.push(x0, y, z0,  x0, y, z1,  x1, y, z1,  x1, y, z0);
+  for (let i = 0; i < 4; i++) layer.normals.push(0, 1, 0);
+  layer.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
+  layer.indices.push(vIdx, vIdx + 1, vIdx + 2, vIdx, vIdx + 2, vIdx + 3);
+}
+
 // Adds a 3D torch: a thin stick box with a small flame cube on top. The
 // stick samples only the brown-stick column of the torch tile, and the
 // flame samples only the orange-flame top — otherwise every face of every
@@ -55674,6 +55844,37 @@ function buildChunkMesh(chunk, world) {
         // Decor: torches and seagrass render as crossed quads.
         if (id === B.TORCH) {
           addTorch(transparent, x, y, z, id);
+          continue;
+        }
+        if (id === B.WIRE) {
+          addWire(transparent, x, y, z, baseX + x, y, baseZ + z, world);
+          continue;
+        }
+        if (id === B.LEVER) {
+          // Render as a small billboard stick — simple but readable. The
+          // texture already shows a tilted lever so it reads as a switch.
+          addCross(transparent, x, y, z, id, 0.3, 0.6);
+          continue;
+        }
+        if (id === B.LAMP) {
+          // LAMP is a normal cube but its face depends on power state.
+          const powered = world.isPowered(baseX + x, y, baseZ + z);
+          // Fall through to standard cube meshing with custom face.
+          for (let f = 0; f < 6; f++) {
+            const face = FACES[f];
+            const nx = x + face.dir[0], ny = y + face.dir[1], nz = z + face.dir[2];
+            const neighbour = world.getBlock(baseX + nx, ny, baseZ + nz);
+            if (neighbour !== B.AIR && (BLOCKS[neighbour]?.solid || BLOCKS[neighbour]?.liquid)) continue;
+            const vIdx = opaque.positions.length / 3;
+            for (const c of face.corners) opaque.positions.push(x + c[0], y + c[1], z + c[2]);
+            opaque.normals.push(face.dir[0], face.dir[1], face.dir[2]);
+            opaque.normals.push(face.dir[0], face.dir[1], face.dir[2]);
+            opaque.normals.push(face.dir[0], face.dir[1], face.dir[2]);
+            opaque.normals.push(face.dir[0], face.dir[1], face.dir[2]);
+            const [u0, v0, u1, v1] = atlasUV(id, powered ? "powered" : f);
+            opaque.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
+            opaque.indices.push(vIdx, vIdx + 1, vIdx + 2, vIdx, vIdx + 2, vIdx + 3);
+          }
           continue;
         }
         if (id === B.DOOR || id === B.DOOR_TOP) {
@@ -55940,6 +56141,13 @@ class World {
     this.doors = new Set();      // `${bx},${by},${bz}` (bottom block) of open doors
     this.torches = new Set();    // `${wx},${wy},${wz}` of placed torches
     this.traders = new Map();    // `${wx},${wy},${wz}` -> [{id, count, cost}, ...]
+    // Wire / power system. Levers are sources (on state in this.levers Set);
+    // `powered` is recomputed on demand from current lever/wire/lamp layout.
+    // Lamps behave like torches for lighting when powered — their position
+    // is added to this.torches dynamically by tickPower.
+    this.levers = new Set();     // modKey of levers currently switched ON
+    this.powered = new Set();    // modKey of cells currently powered
+    this.powerDirty = false;     // recompute on next tick
     // Liquid sim: activeLiquids is the queue of cells to (re)evaluate;
     // liquidLevels stores the flow distance from a source (0 = source).
     this.activeLiquids = new Set();
@@ -55964,6 +56172,88 @@ class World {
     return t;
   }
   removeTrader(x, y, z) { this.traders.delete(World.modKey(x, y, z)); }
+  // Lever toggle. State lives in this.levers; the lamp/wire network is
+  // recomputed on the next tick.
+  isLeverOn(x, y, z) { return this.levers.has(World.modKey(x, y, z)); }
+  toggleLever(x, y, z) {
+    const k = World.modKey(x, y, z);
+    if (this.levers.has(k)) this.levers.delete(k);
+    else this.levers.add(k);
+    this.powerDirty = true;
+  }
+  isPowered(x, y, z) { return this.powered.has(World.modKey(x, y, z)); }
+  // Recompute the powered set from current lever placements. BFS from each
+  // lever: power spreads through WIRE blocks (one cell at a time, no length
+  // cap in on/off mode — feel free to build long corridors). Lamps become
+  // powered when an adjacent wire/lever carries power; we add/remove them
+  // to this.torches so the PointLight pool follows the lamp's state.
+  tickPower() {
+    if (!this.powerDirty) return;
+    this.powerDirty = false;
+    // Snapshot old powered set so we can detect transitions and dirty chunks.
+    const oldPowered = this.powered;
+    const newPowered = new Set();
+    const queue = [];
+    for (const k of this.levers) {
+      const [lx, ly, lz] = k.split(",").map(Number);
+      // Seed: each horizontal neighbour of the lever.
+      for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = lx + dx, nz = lz + dz;
+        const nb = this.getBlock(nx, ly, nz);
+        if (nb === B.WIRE || nb === B.LAMP) queue.push(`${nx},${ly},${nz}`);
+      }
+    }
+    while (queue.length) {
+      const k = queue.shift();
+      if (newPowered.has(k)) continue;
+      const [x, y, z] = k.split(",").map(Number);
+      const id = this.getBlock(x, y, z);
+      if (id !== B.WIRE && id !== B.LAMP) continue;
+      newPowered.add(k);
+      if (id === B.WIRE) {
+        // Spread further from wires only — lamps are sinks.
+        for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          queue.push(`${x+dx},${y},${z+dz}`);
+        }
+      }
+    }
+    this.powered = newPowered;
+    // Reconcile lamp lights: any newly-powered lamp lights up; any
+    // previously-powered lamp that's now dark goes out.
+    for (const k of newPowered) {
+      if (oldPowered.has(k)) continue;
+      const [x, y, z] = k.split(",").map(Number);
+      if (this.getBlock(x, y, z) === B.LAMP) {
+        this.torches.add(k);
+        this._dirtyChunkAt(x, z);
+      }
+    }
+    for (const k of oldPowered) {
+      if (newPowered.has(k)) continue;
+      const [x, y, z] = k.split(",").map(Number);
+      if (this.getBlock(x, y, z) === B.LAMP) {
+        this.torches.delete(k);
+        this._dirtyChunkAt(x, z);
+      }
+    }
+    // Also re-mesh any wire chunk whose power state changed (so wire colour
+    // flips red↔dark).
+    for (const k of newPowered) {
+      if (oldPowered.has(k)) continue;
+      const [x, , z] = k.split(",").map(Number);
+      this._dirtyChunkAt(x, z);
+    }
+    for (const k of oldPowered) {
+      if (newPowered.has(k)) continue;
+      const [x, , z] = k.split(",").map(Number);
+      this._dirtyChunkAt(x, z);
+    }
+  }
+  _dirtyChunkAt(wx, wz) {
+    const cx = Math.floor(wx / CHUNK_SIZE), cz = Math.floor(wz / CHUNK_SIZE);
+    const c = this.getChunk(cx, cz);
+    if (c) c.dirty = true;
+  }
   // Door open/closed state. `bx,by,bz` is the BOTTOM block of the door.
   isDoorOpen(bx, by, bz) { return this.doors.has(`${bx},${by},${bz}`); }
   toggleDoor(bx, by, bz) {
@@ -56057,6 +56347,15 @@ class World {
     const emits = v !== B.AIR && BLOCKS[v] && BLOCKS[v].light;
     if (emits) this.torches.add(k);
     else if (this.torches.has(k)) this.torches.delete(k);
+    // Power-system housekeeping. Adding/removing any wire/lever/lamp cell
+    // triggers a re-tick; removing a lever also clears its on-state so a
+    // dangling switch doesn't keep powering things after destruction.
+    if (v === B.WIRE || v === B.LEVER || v === B.LAMP ||
+        prev === B.WIRE || prev === B.LEVER || prev === B.LAMP) {
+      this.powerDirty = true;
+      if (prev === B.LEVER) this.levers.delete(k);
+      if (prev === B.LAMP) this.torches.delete(k);
+    }
     c.set(lx, wy, lz, v);
     this.modified.set(k, v);
     // Portal hooks: placing LAVA inside a platinum frame lights the portal;
@@ -57081,7 +57380,14 @@ class MiningController {
     // Speed up if the selected item is a pickaxe of sufficient tier.
     const selected = this.getSelectedItem?.();
     const selDef = selected != null ? BLOCKS[selected] : null;
-    const toolMul = (selDef?.tool === "pickaxe" && selDef?.toolTier >= (def.toolTier || 0)) ? 2.2 : 1.0;
+    // Shovel bonus: dirt/sand/grass/snow/moon_dust dig much faster with a
+    // shovel. No tier gate on these blocks — any shovel works on any dirt.
+    const softBlock = def.name === "dirt" || def.name === "sand" ||
+                      def.name === "grass" || def.name === "snow" ||
+                      def.name === "moon_dust";
+    const toolMul = selDef?.tool === "shovel" && softBlock
+      ? 3.0
+      : (selDef?.tool === "pickaxe" && selDef?.toolTier >= (def.toolTier || 0) ? 2.2 : 1.0);
     const time = def.hardness * CONFIG.mining.baseTime / toolMul;
     if (this.progress >= time) {
       // Tool-tier gate: can't break protected blocks without the right pickaxe.
@@ -57232,7 +57538,18 @@ const RECIPES = [
   { out: [B.PICKAXE_IRON, 1],     in: [{ id: B.IRON_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }],        name: "Iron Pickaxe (mines diamond)" },
   { out: [B.PICKAXE_DIAMOND, 1],  in: [{ id: B.DIAMOND_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }],     name: "Diamond Pickaxe (mines platinum)" },
   { out: [B.PICKAXE_PLATINUM, 1], in: [{ id: B.PLATINUM_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }],    name: "Platinum Pickaxe (best — mines everything)" },
+  { out: [B.SHOVEL_WOOD,     1], in: [{ id: B.PLANKS, count: 3 },        { id: B.TWIG, count: 1 }], name: "Wood Shovel (digs dirt/sand)" },
+  { out: [B.SHOVEL_STONE,    1], in: [{ id: B.COBBLE, count: 3 },        { id: B.TWIG, count: 1 }], name: "Stone Shovel" },
+  { out: [B.SHOVEL_IRON,     1], in: [{ id: B.IRON_BLOCK, count: 1 },    { id: B.TWIG, count: 1 }], name: "Iron Shovel" },
+  { out: [B.SHOVEL_DIAMOND,  1], in: [{ id: B.DIAMOND_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }], name: "Diamond Shovel" },
+  { out: [B.SHOVEL_PLATINUM, 1], in: [{ id: B.PLATINUM_BLOCK, count: 1 },{ id: B.TWIG, count: 1 }], name: "Platinum Shovel (fastest dig)" },
   { out: [B.BUCKET, 1], in: [{ id: B.IRON_BLOCK, count: 1 }], name: "Bucket (pick up & place water/lava)" },
+  { out: [B.WIRE, 8], in: [{ id: B.IRON_ORE, count: 1 }], name: "Wire ×8 (carries power from levers to lamps)" },
+  { out: [B.LEVER, 1], in: [{ id: B.PLANKS, count: 1 }, { id: B.COBBLE, count: 1 }], name: "Lever (click to toggle power)" },
+  { out: [B.LAMP, 1], in: [{ id: B.IRON_BLOCK, count: 1 }, { id: B.TORCH, count: 1 }], name: "Lamp (lights up when powered)" },
+  { out: [B.GRANITE, 4], in: [{ id: B.STONE, count: 4 }], name: "Granite ×4" },
+  { out: [B.MARBLE, 4], in: [{ id: B.STONE, count: 4 }, { id: B.SAND, count: 1 }], name: "Marble ×4" },
+  { out: [B.BASALT, 4], in: [{ id: B.COBBLE, count: 4 }], name: "Basalt ×4" },
 ];
 
 // Tool tier hints (informational): wood < stone < iron < gold < diamond < platinum.
@@ -57689,8 +58006,8 @@ class MoonGolem {
     this.pos = pos.clone();
     this.vel = new THREE.Vector3();
     this.yaw = 0;
-    this.maxHealth = 100;
-    this.health = 100;
+    this.maxHealth = 200;
+    this.health = 200;
     this.width = 1.4;
     this.height = 2.6;
     this.onGround = false;
@@ -58852,6 +59169,7 @@ async function main() {
         if (hitId === B.CHEST) { openChest(t.x, t.y, t.z); return; }
         if (hitId === B.DOOR)  { toggleDoorAt(t.x, t.y, t.z); return; }
         if (hitId === B.TRADER) { openTrader(t.x, t.y, t.z); return; }
+        if (hitId === B.LEVER) { toggleLeverAt(t.x, t.y, t.z); return; }
       }
     }
     const sel = inv.selected();
@@ -58956,6 +59274,11 @@ async function main() {
     const cx = Math.floor(x / CONFIG.world.chunkSize), cz = Math.floor(z / CONFIG.world.chunkSize);
     const c = world.getChunk(cx, cz);
     if (c) c.dirty = true;
+  }
+  function toggleLeverAt(x, y, z) {
+    if (world.getBlock(x, y, z) !== B.LEVER) return;
+    world.toggleLever(x, y, z);
+    if (typeof window.place === "function") window.place();
   }
 
   function eat(id) {
@@ -59507,8 +59830,11 @@ async function main() {
     B.WATER, B.LAVA,
     B.MOON_ROCK, B.MOON_DUST, B.MOON_STONE,
     B.PLATINUM_TROPHY,
+    B.WIRE, B.LEVER, B.LAMP,
+    B.GRANITE, B.MARBLE, B.BASALT,
     B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE, B.PLATINUM_ORE,
     B.PICKAXE_WOOD, B.PICKAXE_STONE, B.PICKAXE_IRON, B.PICKAXE_DIAMOND, B.PICKAXE_PLATINUM,
+    B.SHOVEL_WOOD, B.SHOVEL_STONE, B.SHOVEL_IRON, B.SHOVEL_DIAMOND, B.SHOVEL_PLATINUM,
     B.RAW_BEEF, B.COOKED_BEEF, B.RAW_FISH, B.COOKED_FISH,
     B.BUCKET, B.WATER_BUCKET, B.LAVA_BUCKET,
   ];
@@ -60013,7 +60339,7 @@ async function main() {
         const fill = $("#boss-hp-fill");
         if (fill) fill.style.width = pct + "%";
         const lbl = $("#boss-hp-label");
-        if (lbl) lbl.textContent = `Moon Rock Golem  ${Math.ceil(bossGolem.health)}/${bossGolem.maxHealth}`;
+        if (lbl) lbl.textContent = `Moon Rock Golem  ${Math.ceil(bossGolem.health)}/${bossGolem.maxHealth}  ${gameWon ? "— VICTORY" : ""}`;
       } else {
         bossBar.style.display = "none";
       }
@@ -60053,6 +60379,7 @@ async function main() {
 
     world.update(player.pos.x, player.pos.z);
     world.tickLiquids();
+    world.tickPower();
 
     // Multiplayer: broadcast our position at ~15Hz and lerp remote avatars.
     if (isInRoom()) {

@@ -78,7 +78,14 @@ export class MiningController {
     // Speed up if the selected item is a pickaxe of sufficient tier.
     const selected = this.getSelectedItem?.();
     const selDef = selected != null ? BLOCKS[selected] : null;
-    const toolMul = (selDef?.tool === "pickaxe" && selDef?.toolTier >= (def.toolTier || 0)) ? 2.2 : 1.0;
+    // Shovel bonus: dirt/sand/grass/snow/moon_dust dig much faster with a
+    // shovel. No tier gate on these blocks — any shovel works on any dirt.
+    const softBlock = def.name === "dirt" || def.name === "sand" ||
+                      def.name === "grass" || def.name === "snow" ||
+                      def.name === "moon_dust";
+    const toolMul = selDef?.tool === "shovel" && softBlock
+      ? 3.0
+      : (selDef?.tool === "pickaxe" && selDef?.toolTier >= (def.toolTier || 0) ? 2.2 : 1.0);
     const time = def.hardness * CONFIG.mining.baseTime / toolMul;
     if (this.progress >= time) {
       // Tool-tier gate: can't break protected blocks without the right pickaxe.

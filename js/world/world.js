@@ -62,6 +62,13 @@ export class World {
     this.doors = new Set();      // `${bx},${by},${bz}` (bottom block) of open doors
     this.torches = new Set();    // `${wx},${wy},${wz}` of placed torches
     this.traders = new Map();    // `${wx},${wy},${wz}` -> [{id, count, cost}, ...]
+    // Wire / power system. Levers are sources (on state in this.levers Set);
+    // `powered` is recomputed on demand from current lever/wire/lamp layout.
+    // Lamps behave like torches for lighting when powered — their position
+    // is added to this.torches dynamically by tickPower.
+    this.levers = new Set();     // modKey of levers currently switched ON
+    this.powered = new Set();    // modKey of cells currently powered
+    this.powerDirty = false;     // recompute on next tick
     // Liquid sim: activeLiquids is the queue of cells to (re)evaluate;
     // liquidLevels stores the flow distance from a source (0 = source).
     this.activeLiquids = new Set();
@@ -86,6 +93,88 @@ export class World {
     return t;
   }
   removeTrader(x, y, z) { this.traders.delete(World.modKey(x, y, z)); }
+  // Lever toggle. State lives in this.levers; the lamp/wire network is
+  // recomputed on the next tick.
+  isLeverOn(x, y, z) { return this.levers.has(World.modKey(x, y, z)); }
+  toggleLever(x, y, z) {
+    const k = World.modKey(x, y, z);
+    if (this.levers.has(k)) this.levers.delete(k);
+    else this.levers.add(k);
+    this.powerDirty = true;
+  }
+  isPowered(x, y, z) { return this.powered.has(World.modKey(x, y, z)); }
+  // Recompute the powered set from current lever placements. BFS from each
+  // lever: power spreads through WIRE blocks (one cell at a time, no length
+  // cap in on/off mode — feel free to build long corridors). Lamps become
+  // powered when an adjacent wire/lever carries power; we add/remove them
+  // to this.torches so the PointLight pool follows the lamp's state.
+  tickPower() {
+    if (!this.powerDirty) return;
+    this.powerDirty = false;
+    // Snapshot old powered set so we can detect transitions and dirty chunks.
+    const oldPowered = this.powered;
+    const newPowered = new Set();
+    const queue = [];
+    for (const k of this.levers) {
+      const [lx, ly, lz] = k.split(",").map(Number);
+      // Seed: each horizontal neighbour of the lever.
+      for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = lx + dx, nz = lz + dz;
+        const nb = this.getBlock(nx, ly, nz);
+        if (nb === B.WIRE || nb === B.LAMP) queue.push(`${nx},${ly},${nz}`);
+      }
+    }
+    while (queue.length) {
+      const k = queue.shift();
+      if (newPowered.has(k)) continue;
+      const [x, y, z] = k.split(",").map(Number);
+      const id = this.getBlock(x, y, z);
+      if (id !== B.WIRE && id !== B.LAMP) continue;
+      newPowered.add(k);
+      if (id === B.WIRE) {
+        // Spread further from wires only — lamps are sinks.
+        for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          queue.push(`${x+dx},${y},${z+dz}`);
+        }
+      }
+    }
+    this.powered = newPowered;
+    // Reconcile lamp lights: any newly-powered lamp lights up; any
+    // previously-powered lamp that's now dark goes out.
+    for (const k of newPowered) {
+      if (oldPowered.has(k)) continue;
+      const [x, y, z] = k.split(",").map(Number);
+      if (this.getBlock(x, y, z) === B.LAMP) {
+        this.torches.add(k);
+        this._dirtyChunkAt(x, z);
+      }
+    }
+    for (const k of oldPowered) {
+      if (newPowered.has(k)) continue;
+      const [x, y, z] = k.split(",").map(Number);
+      if (this.getBlock(x, y, z) === B.LAMP) {
+        this.torches.delete(k);
+        this._dirtyChunkAt(x, z);
+      }
+    }
+    // Also re-mesh any wire chunk whose power state changed (so wire colour
+    // flips red↔dark).
+    for (const k of newPowered) {
+      if (oldPowered.has(k)) continue;
+      const [x, , z] = k.split(",").map(Number);
+      this._dirtyChunkAt(x, z);
+    }
+    for (const k of oldPowered) {
+      if (newPowered.has(k)) continue;
+      const [x, , z] = k.split(",").map(Number);
+      this._dirtyChunkAt(x, z);
+    }
+  }
+  _dirtyChunkAt(wx, wz) {
+    const cx = Math.floor(wx / CHUNK_SIZE), cz = Math.floor(wz / CHUNK_SIZE);
+    const c = this.getChunk(cx, cz);
+    if (c) c.dirty = true;
+  }
   // Door open/closed state. `bx,by,bz` is the BOTTOM block of the door.
   isDoorOpen(bx, by, bz) { return this.doors.has(`${bx},${by},${bz}`); }
   toggleDoor(bx, by, bz) {
@@ -179,6 +268,15 @@ export class World {
     const emits = v !== B.AIR && BLOCKS[v] && BLOCKS[v].light;
     if (emits) this.torches.add(k);
     else if (this.torches.has(k)) this.torches.delete(k);
+    // Power-system housekeeping. Adding/removing any wire/lever/lamp cell
+    // triggers a re-tick; removing a lever also clears its on-state so a
+    // dangling switch doesn't keep powering things after destruction.
+    if (v === B.WIRE || v === B.LEVER || v === B.LAMP ||
+        prev === B.WIRE || prev === B.LEVER || prev === B.LAMP) {
+      this.powerDirty = true;
+      if (prev === B.LEVER) this.levers.delete(k);
+      if (prev === B.LAMP) this.torches.delete(k);
+    }
     c.set(lx, wy, lz, v);
     this.modified.set(k, v);
     // Portal hooks: placing LAVA inside a platinum frame lights the portal;

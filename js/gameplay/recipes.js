@@ -23,7 +23,18 @@ export const RECIPES = [
   { out: [B.PICKAXE_IRON, 1],     in: [{ id: B.IRON_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }],        name: "Iron Pickaxe (mines diamond)" },
   { out: [B.PICKAXE_DIAMOND, 1],  in: [{ id: B.DIAMOND_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }],     name: "Diamond Pickaxe (mines platinum)" },
   { out: [B.PICKAXE_PLATINUM, 1], in: [{ id: B.PLATINUM_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }],    name: "Platinum Pickaxe (best — mines everything)" },
+  { out: [B.SHOVEL_WOOD,     1], in: [{ id: B.PLANKS, count: 3 },        { id: B.TWIG, count: 1 }], name: "Wood Shovel (digs dirt/sand)" },
+  { out: [B.SHOVEL_STONE,    1], in: [{ id: B.COBBLE, count: 3 },        { id: B.TWIG, count: 1 }], name: "Stone Shovel" },
+  { out: [B.SHOVEL_IRON,     1], in: [{ id: B.IRON_BLOCK, count: 1 },    { id: B.TWIG, count: 1 }], name: "Iron Shovel" },
+  { out: [B.SHOVEL_DIAMOND,  1], in: [{ id: B.DIAMOND_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }], name: "Diamond Shovel" },
+  { out: [B.SHOVEL_PLATINUM, 1], in: [{ id: B.PLATINUM_BLOCK, count: 1 },{ id: B.TWIG, count: 1 }], name: "Platinum Shovel (fastest dig)" },
   { out: [B.BUCKET, 1], in: [{ id: B.IRON_BLOCK, count: 1 }], name: "Bucket (pick up & place water/lava)" },
+  { out: [B.WIRE, 8], in: [{ id: B.IRON_ORE, count: 1 }], name: "Wire ×8 (carries power from levers to lamps)" },
+  { out: [B.LEVER, 1], in: [{ id: B.PLANKS, count: 1 }, { id: B.COBBLE, count: 1 }], name: "Lever (click to toggle power)" },
+  { out: [B.LAMP, 1], in: [{ id: B.IRON_BLOCK, count: 1 }, { id: B.TORCH, count: 1 }], name: "Lamp (lights up when powered)" },
+  { out: [B.GRANITE, 4], in: [{ id: B.STONE, count: 4 }], name: "Granite ×4" },
+  { out: [B.MARBLE, 4], in: [{ id: B.STONE, count: 4 }, { id: B.SAND, count: 1 }], name: "Marble ×4" },
+  { out: [B.BASALT, 4], in: [{ id: B.COBBLE, count: 4 }], name: "Basalt ×4" },
 ];
 
 // Tool tier hints (informational): wood < stone < iron < gold < diamond < platinum.

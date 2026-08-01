@@ -28,6 +28,17 @@ export const B = {
   MOON_DUST: 53,
   MOON_STONE: 54,
   PLATINUM_TROPHY: 55,
+  WIRE: 56,
+  LEVER: 57,
+  LAMP: 58,
+  GRANITE: 59,
+  MARBLE: 60,
+  BASALT: 61,
+  SHOVEL_WOOD: 62,
+  SHOVEL_STONE: 63,
+  SHOVEL_IRON: 64,
+  SHOVEL_DIAMOND: 65,
+  SHOVEL_PLATINUM: 66,
 };
 
 export const BLOCKS = {
@@ -89,6 +100,17 @@ export const BLOCKS = {
   [B.MOON_DUST]:   { name: "moon_dust",   solid: true, hardness: 0.4, color: "#b0b0b8" },
   [B.MOON_STONE]:  { name: "moon_stone",  solid: true, hardness: 3.0, color: "#5a5a62", toolTier: 2 },
   [B.PLATINUM_TROPHY]: { name: "platinum_trophy", solid: true, hardness: 1.5, color: "#f0f0f8", light: 12, decor: true, trophy: true },
+  [B.WIRE]:  { name: "wire",  solid: false, hardness: 0.1, color: "#cc1010", transparent: true, decor: true, wire: true },
+  [B.LEVER]: { name: "lever", solid: false, hardness: 0.3, color: "#7a5a3a", transparent: true, decor: true, interactive: true, lever: true, source: true },
+  [B.LAMP]:  { name: "lamp",  solid: true,  hardness: 0.6, color: "#888888", transparent: false, lamp: true, receiver: true },
+  [B.GRANITE]: { name: "granite", solid: true, hardness: 1.7, color: "#9a5a4a", toolTier: 1 },
+  [B.MARBLE]:  { name: "marble",  solid: true, hardness: 1.5, color: "#e8e4d8" },
+  [B.BASALT]:  { name: "basalt",  solid: true, hardness: 2.2, color: "#2a2a32", toolTier: 1 },
+  [B.SHOVEL_WOOD]:     { name: "shovel_wood",     solid: false, hardness: 0.1, color: "#a07a3a", item: true, tool: "shovel", toolTier: 1 },
+  [B.SHOVEL_STONE]:    { name: "shovel_stone",    solid: false, hardness: 0.1, color: "#9a9a9a", item: true, tool: "shovel", toolTier: 2 },
+  [B.SHOVEL_IRON]:     { name: "shovel_iron",     solid: false, hardness: 0.1, color: "#dcdcdc", item: true, tool: "shovel", toolTier: 3 },
+  [B.SHOVEL_DIAMOND]:  { name: "shovel_diamond",  solid: false, hardness: 0.1, color: "#8af6ff", item: true, tool: "shovel", toolTier: 4 },
+  [B.SHOVEL_PLATINUM]: { name: "shovel_platinum", solid: false, hardness: 0.1, color: "#f0f0f8", item: true, tool: "shovel", toolTier: 5 },
 };
 
 export const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;

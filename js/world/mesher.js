@@ -65,6 +65,41 @@ function addCross(layer, x, y, z, id, w, h) {
   }
 }
 
+// Flat redstone-style wire. Renders as a thin quad lying on top of the
+// support block. Each of the 4 cardinal directions gets its own arm quad
+// when the neighbour cell also contains WIRE, so two adjacent wires read
+// as a connected line (and three / four as T / cross).
+function addWire(layer, x, y, z, wx, wy, wz, world) {
+  const powered = world.isPowered(wx, wy, wz);
+  const [u0, v0, u1, v1] = atlasUV(B.WIRE, powered ? "powered" : "side");
+  const yTop = y + 0.02; // float just above the floor to avoid z-fighting
+  // Central node: small flat square in the middle of the cell.
+  const cx = x + 0.5, cz = z + 0.5;
+  const r = 0.18;
+  _pushFlatQuad(layer, cx - r, cz - r, cx + r, cz + r, yTop, u0, v0, u1, v1);
+  // Arms toward each connected neighbour. Half-thickness so the wire reads
+  // as a single line crossing the edge.
+  const arms = [
+    { dir: [-1, 0],  x0: cx - 0.5, z0: cz - r, x1: cx,     z1: cz + r },
+    { dir: [ 1, 0],  x0: cx,       z0: cz - r, x1: cx + 0.5, z1: cz + r },
+    { dir: [ 0,-1],  x0: cx - r,   z0: cz - 0.5, x1: cx + r, z1: cz },
+    { dir: [ 0, 1],  x0: cx - r,   z0: cz,     x1: cx + r, z1: cz + 0.5 },
+  ];
+  for (const a of arms) {
+    const nb = world.getBlock(wx + a.dir[0], wy, wz + a.dir[1]);
+    if (nb === B.WIRE || nb === B.LEVER || nb === B.LAMP) {
+      _pushFlatQuad(layer, a.x0, a.z0, a.x1, a.z1, yTop, u0, v0, u1, v1);
+    }
+  }
+}
+function _pushFlatQuad(layer, x0, z0, x1, z1, y, u0, v0, u1, v1) {
+  const vIdx = layer.positions.length / 3;
+  layer.positions.push(x0, y, z0,  x0, y, z1,  x1, y, z1,  x1, y, z0);
+  for (let i = 0; i < 4; i++) layer.normals.push(0, 1, 0);
+  layer.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
+  layer.indices.push(vIdx, vIdx + 1, vIdx + 2, vIdx, vIdx + 2, vIdx + 3);
+}
+
 // Adds a 3D torch: a thin stick box with a small flame cube on top. The
 // stick samples only the brown-stick column of the torch tile, and the
 // flame samples only the orange-flame top — otherwise every face of every
@@ -169,6 +204,37 @@ export function buildChunkMesh(chunk, world) {
         // Decor: torches and seagrass render as crossed quads.
         if (id === B.TORCH) {
           addTorch(transparent, x, y, z, id);
+          continue;
+        }
+        if (id === B.WIRE) {
+          addWire(transparent, x, y, z, baseX + x, y, baseZ + z, world);
+          continue;
+        }
+        if (id === B.LEVER) {
+          // Render as a small billboard stick — simple but readable. The
+          // texture already shows a tilted lever so it reads as a switch.
+          addCross(transparent, x, y, z, id, 0.3, 0.6);
+          continue;
+        }
+        if (id === B.LAMP) {
+          // LAMP is a normal cube but its face depends on power state.
+          const powered = world.isPowered(baseX + x, y, baseZ + z);
+          // Fall through to standard cube meshing with custom face.
+          for (let f = 0; f < 6; f++) {
+            const face = FACES[f];
+            const nx = x + face.dir[0], ny = y + face.dir[1], nz = z + face.dir[2];
+            const neighbour = world.getBlock(baseX + nx, ny, baseZ + nz);
+            if (neighbour !== B.AIR && (BLOCKS[neighbour]?.solid || BLOCKS[neighbour]?.liquid)) continue;
+            const vIdx = opaque.positions.length / 3;
+            for (const c of face.corners) opaque.positions.push(x + c[0], y + c[1], z + c[2]);
+            opaque.normals.push(face.dir[0], face.dir[1], face.dir[2]);
+            opaque.normals.push(face.dir[0], face.dir[1], face.dir[2]);
+            opaque.normals.push(face.dir[0], face.dir[1], face.dir[2]);
+            opaque.normals.push(face.dir[0], face.dir[1], face.dir[2]);
+            const [u0, v0, u1, v1] = atlasUV(id, powered ? "powered" : f);
+            opaque.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
+            opaque.indices.push(vIdx, vIdx + 1, vIdx + 2, vIdx, vIdx + 2, vIdx + 3);
+          }
           continue;
         }
         if (id === B.DOOR || id === B.DOOR_TOP) {

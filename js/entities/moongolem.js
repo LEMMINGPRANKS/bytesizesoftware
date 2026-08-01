@@ -76,8 +76,8 @@ export class MoonGolem {
     this.pos = pos.clone();
     this.vel = new THREE.Vector3();
     this.yaw = 0;
-    this.maxHealth = 100;
-    this.health = 100;
+    this.maxHealth = 200;
+    this.health = 200;
     this.width = 1.4;
     this.height = 2.6;
     this.onGround = false;

@@ -368,6 +368,7 @@ async function main() {
         if (hitId === B.CHEST) { openChest(t.x, t.y, t.z); return; }
         if (hitId === B.DOOR)  { toggleDoorAt(t.x, t.y, t.z); return; }
         if (hitId === B.TRADER) { openTrader(t.x, t.y, t.z); return; }
+        if (hitId === B.LEVER) { toggleLeverAt(t.x, t.y, t.z); return; }
       }
     }
     const sel = inv.selected();
@@ -472,6 +473,11 @@ async function main() {
     const cx = Math.floor(x / CONFIG.world.chunkSize), cz = Math.floor(z / CONFIG.world.chunkSize);
     const c = world.getChunk(cx, cz);
     if (c) c.dirty = true;
+  }
+  function toggleLeverAt(x, y, z) {
+    if (world.getBlock(x, y, z) !== B.LEVER) return;
+    world.toggleLever(x, y, z);
+    if (typeof window.place === "function") window.place();
   }
 
   function eat(id) {
@@ -1023,8 +1029,11 @@ async function main() {
     B.WATER, B.LAVA,
     B.MOON_ROCK, B.MOON_DUST, B.MOON_STONE,
     B.PLATINUM_TROPHY,
+    B.WIRE, B.LEVER, B.LAMP,
+    B.GRANITE, B.MARBLE, B.BASALT,
     B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE, B.PLATINUM_ORE,
     B.PICKAXE_WOOD, B.PICKAXE_STONE, B.PICKAXE_IRON, B.PICKAXE_DIAMOND, B.PICKAXE_PLATINUM,
+    B.SHOVEL_WOOD, B.SHOVEL_STONE, B.SHOVEL_IRON, B.SHOVEL_DIAMOND, B.SHOVEL_PLATINUM,
     B.RAW_BEEF, B.COOKED_BEEF, B.RAW_FISH, B.COOKED_FISH,
     B.BUCKET, B.WATER_BUCKET, B.LAVA_BUCKET,
   ];
@@ -1529,7 +1538,7 @@ async function main() {
         const fill = $("#boss-hp-fill");
         if (fill) fill.style.width = pct + "%";
         const lbl = $("#boss-hp-label");
-        if (lbl) lbl.textContent = `Moon Rock Golem  ${Math.ceil(bossGolem.health)}/${bossGolem.maxHealth}`;
+        if (lbl) lbl.textContent = `Moon Rock Golem  ${Math.ceil(bossGolem.health)}/${bossGolem.maxHealth}  ${gameWon ? "— VICTORY" : ""}`;
       } else {
         bossBar.style.display = "none";
       }
@@ -1569,6 +1578,7 @@ async function main() {
 
     world.update(player.pos.x, player.pos.z);
     world.tickLiquids();
+    world.tickPower();
 
     // Multiplayer: broadcast our position at ~15Hz and lerp remote avatars.
     if (isInRoom()) {
