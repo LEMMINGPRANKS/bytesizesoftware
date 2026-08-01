@@ -127,6 +127,13 @@ export class World {
         if (nb === B.WIRE || nb === B.LAMP ||
             nb === B.PISTON || nb === B.STICKY_PISTON) queue.push(`${nx},${ly},${nz}`);
       }
+      // Also seed vertical neighbours so a lever mounted on the floor can
+      // power a wire/lamp directly below it.
+      for (const dy of [-1, 1]) {
+        const nb = this.getBlock(lx, ly + dy, lz);
+        if (nb === B.WIRE || nb === B.LAMP ||
+            nb === B.PISTON || nb === B.STICKY_PISTON) queue.push(`${lx},${ly + dy},${lz}`);
+      }
     }
     while (queue.length) {
       const k = queue.shift();
@@ -139,6 +146,14 @@ export class World {
         // Spread further from wires only — lamps and pistons are sinks.
         for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
           queue.push(`${x+dx},${y},${z+dz}`);
+        }
+        // Power any LAMP/PISTON directly above/below the wire so ceiling
+        // lamps and floor pistons work without an extra wire stub.
+        for (const dy of [-1, 1]) {
+          const nb = this.getBlock(x, y + dy, z);
+          if (nb === B.LAMP || nb === B.PISTON || nb === B.STICKY_PISTON) {
+            queue.push(`${x},${y + dy},${z}`);
+          }
         }
       }
     }
