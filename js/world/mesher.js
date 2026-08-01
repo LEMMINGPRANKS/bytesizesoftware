@@ -244,6 +244,14 @@ export function buildChunkMesh(chunk, world) {
           addDoor(transparent, x, y, z, id, isOpen);
           continue;
         }
+        if (id === B.CRYSTAL || id === B.GLOW_MUSHROOM) {
+          // Underground cave decor — glowing crystal cluster or mushroom,
+          // rendered as crossed billboard quads (like seagrass).
+          const w = id === B.CRYSTAL ? 0.55 : 0.5;
+          const h = id === B.CRYSTAL ? 0.85 : 0.7;
+          addCross(transparent, x, y, z, id, w, h);
+          continue;
+        }
         if (id === B.SEAGRASS || id === B.KELP || id === B.CORAL) {
           // Crossed blades + waterlogged cube faces (so it doesn't look like
           // an air bubble). Render water faces that abut AIR or non-water

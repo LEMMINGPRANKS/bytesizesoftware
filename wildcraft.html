@@ -54162,6 +54162,8 @@ const B = {
   SHOVEL_IRON: 64,
   SHOVEL_DIAMOND: 65,
   SHOVEL_PLATINUM: 66,
+  CRYSTAL: 67,
+  GLOW_MUSHROOM: 68,
 };
 
 const BLOCKS = {
@@ -54234,6 +54236,8 @@ const BLOCKS = {
   [B.SHOVEL_IRON]:     { name: "shovel_iron",     solid: false, hardness: 0.1, color: "#dcdcdc", item: true, tool: "shovel", toolTier: 3 },
   [B.SHOVEL_DIAMOND]:  { name: "shovel_diamond",  solid: false, hardness: 0.1, color: "#8af6ff", item: true, tool: "shovel", toolTier: 4 },
   [B.SHOVEL_PLATINUM]: { name: "shovel_platinum", solid: false, hardness: 0.1, color: "#f0f0f8", item: true, tool: "shovel", toolTier: 5 },
+  [B.CRYSTAL]: { name: "crystal", solid: false, hardness: 0.4, color: "#5affe0", transparent: true, decor: true, light: 9 },
+  [B.GLOW_MUSHROOM]: { name: "glow_mushroom", solid: false, hardness: 0.1, color: "#a0e0ff", transparent: true, decor: true, light: 8 },
 };
 
 const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;
@@ -55065,6 +55069,58 @@ function drawTexture(id, face) {
       specks(ctx, "#4a4a55", 6);
       break;
     }
+    case B.CRYSTAL: {
+      // Glowing cyan crystal cluster — faceted shards radiating from a base.
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      // Base cluster shadow
+      ctx.fillStyle = "rgba(20,80,90,0.6)";
+      ctx.fillRect(2, 13, 12, 2);
+      // Crystals: angled shards pointing up
+      const shards = [
+        { x: 4, w: 2, h: 8, tint: "#5affe0" },
+        { x: 7, w: 3, h: 11, tint: "#9afce8" },
+        { x: 11, w: 2, h: 7, tint: "#3ad6c0" },
+        { x: 2, w: 2, h: 5, tint: "#7af0d8" },
+        { x: 13, w: 2, h: 6, tint: "#5affe0" },
+      ];
+      for (const s of shards) {
+        ctx.fillStyle = s.tint;
+        ctx.beginPath();
+        ctx.moveTo(s.x, 13);
+        ctx.lineTo(s.x + s.w / 2, 13 - s.h);
+        ctx.lineTo(s.x + s.w, 13);
+        ctx.closePath();
+        ctx.fill();
+        // Bright facet line
+        ctx.strokeStyle = "#d0fff0";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(s.x + s.w / 2, 13 - s.h);
+        ctx.lineTo(s.x + s.w / 2, 13);
+        ctx.stroke();
+      }
+      break;
+    }
+    case B.GLOW_MUSHROOM: {
+      // Soft pale-blue mushroom with a glowing cap.
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      // Stem
+      ctx.fillStyle = "#e8e8d8";
+      ctx.fillRect(7, 8, 2, 6);
+      // Cap (dome)
+      ctx.fillStyle = "#a0e0ff";
+      ctx.beginPath();
+      ctx.arc(8, 8, 5, Math.PI, 0);
+      ctx.fill();
+      // Glow highlights
+      ctx.fillStyle = "#e0f5ff";
+      ctx.fillRect(5, 6, 2, 1);
+      ctx.fillRect(10, 5, 2, 1);
+      // Underside gills
+      ctx.fillStyle = "#8090a8";
+      ctx.fillRect(4, 8, 8, 1);
+      break;
+    }
     default: fillNoise(ctx, base, 20); break;
   }
   const tex = new THREE.CanvasTexture(c);
@@ -55357,6 +55413,23 @@ function generateChunk(cx, cz, noise, world) {
           }
         }
 
+        // Decorative stone veins — granite, marble, basalt ribbons through the
+        // stone layers to make caves visually distinct. Each block has its own
+        // low-frequency noise so the veins don't overlap into a mess.
+        if (id === B.STONE) {
+          const gA = noise.noise3(wx * 0.08 + 11, y * 0.08 + 22, wz * 0.08 + 33);
+          const gB = noise.noise3(wx * 0.18 + 44, y * 0.18 + 55, wz * 0.18 + 66);
+          if (gA > 0.55 && gB > 0.45) id = B.GRANITE;
+          else if (gA < -0.55 && gB < -0.4) {
+            // Marble likes shallower depths (decorative capstone).
+            if (surface - y < 16) id = B.MARBLE;
+          } else {
+            // Basalt likes depth — volcanic dark pockets.
+            const bn = noise.noise3(wx * 0.07 + 700, y * 0.07 + 700, wz * 0.07 + 700);
+            if (bn > 0.6 && surface - y > 14) id = B.BASALT;
+          }
+        }
+
         // Caves: tunnels carved by 3D noise. Two noises multiplied → wormy veins
         // instead of blobs. Only carve below surface so the ground stays solid.
         if (id === B.STONE && y < surface - 2 && y > 1) {
@@ -55367,6 +55440,29 @@ function generateChunk(cx, cz, noise, world) {
         // Lava pools: low caves near bedrock flood with lava. Risk-reward for
         // deep mining — diamonds + platinum sit at the same depth.
         if (id === B.AIR && y <= 6) id = B.LAVA;
+        // Vibrant caves: place crystals (deep) and glow mushrooms (shallow) on
+        // cave floors. The cell below is already written because columns are
+        // built bottom-up. We can't have decor in lava, so the y<=6 check above
+        // takes priority.
+        if (id === B.AIR && y > 7 && y < surface - 2) {
+          const below = chunk.blocks[chunk.idx(x, y - 1, z)];
+          const isFloor = below === B.STONE || below === B.COBBLE ||
+                          below === B.GRANITE || below === B.MARBLE ||
+                          below === B.BASALT || below === B.DIRT;
+          if (isFloor) {
+            const depth = surface - y;
+            // Crystals — deep, near diamond depth. Rare clusters.
+            if (depth >= 12 && depth <= 30) {
+              const cn = noise.noise3(wx * 0.4 + 17, y * 0.4 + 23, wz * 0.4 + 31);
+              if (cn > 0.78) id = B.CRYSTAL;
+            }
+            // Glow mushrooms — shallower caves. Sparser, but enough to read.
+            if (id === B.AIR && depth >= 4 && depth < 14) {
+              const mn = noise.noise3(wx * 0.5 + 200, y * 0.5 + 200, wz * 0.5 + 200);
+              if (mn > 0.82) id = B.GLOW_MUSHROOM;
+            }
+          }
+        }
         chunk.blocks[chunk.idx(x, y, z)] = id;
       }
 
@@ -55882,6 +55978,14 @@ function buildChunkMesh(chunk, world) {
           const baseY = id === B.DOOR ? y : y - 1;
           const isOpen = world.isDoorOpen(baseX + x, baseY, baseZ + z);
           addDoor(transparent, x, y, z, id, isOpen);
+          continue;
+        }
+        if (id === B.CRYSTAL || id === B.GLOW_MUSHROOM) {
+          // Underground cave decor — glowing crystal cluster or mushroom,
+          // rendered as crossed billboard quads (like seagrass).
+          const w = id === B.CRYSTAL ? 0.55 : 0.5;
+          const h = id === B.CRYSTAL ? 0.85 : 0.7;
+          addCross(transparent, x, y, z, id, w, h);
           continue;
         }
         if (id === B.SEAGRASS || id === B.KELP || id === B.CORAL) {
@@ -59832,6 +59936,7 @@ async function main() {
     B.PLATINUM_TROPHY,
     B.WIRE, B.LEVER, B.LAMP,
     B.GRANITE, B.MARBLE, B.BASALT,
+    B.CRYSTAL, B.GLOW_MUSHROOM,
     B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE, B.PLATINUM_ORE,
     B.PICKAXE_WOOD, B.PICKAXE_STONE, B.PICKAXE_IRON, B.PICKAXE_DIAMOND, B.PICKAXE_PLATINUM,
     B.SHOVEL_WOOD, B.SHOVEL_STONE, B.SHOVEL_IRON, B.SHOVEL_DIAMOND, B.SHOVEL_PLATINUM,

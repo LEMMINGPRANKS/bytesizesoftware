@@ -759,6 +759,58 @@ function drawTexture(id, face) {
       specks(ctx, "#4a4a55", 6);
       break;
     }
+    case B.CRYSTAL: {
+      // Glowing cyan crystal cluster — faceted shards radiating from a base.
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      // Base cluster shadow
+      ctx.fillStyle = "rgba(20,80,90,0.6)";
+      ctx.fillRect(2, 13, 12, 2);
+      // Crystals: angled shards pointing up
+      const shards = [
+        { x: 4, w: 2, h: 8, tint: "#5affe0" },
+        { x: 7, w: 3, h: 11, tint: "#9afce8" },
+        { x: 11, w: 2, h: 7, tint: "#3ad6c0" },
+        { x: 2, w: 2, h: 5, tint: "#7af0d8" },
+        { x: 13, w: 2, h: 6, tint: "#5affe0" },
+      ];
+      for (const s of shards) {
+        ctx.fillStyle = s.tint;
+        ctx.beginPath();
+        ctx.moveTo(s.x, 13);
+        ctx.lineTo(s.x + s.w / 2, 13 - s.h);
+        ctx.lineTo(s.x + s.w, 13);
+        ctx.closePath();
+        ctx.fill();
+        // Bright facet line
+        ctx.strokeStyle = "#d0fff0";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(s.x + s.w / 2, 13 - s.h);
+        ctx.lineTo(s.x + s.w / 2, 13);
+        ctx.stroke();
+      }
+      break;
+    }
+    case B.GLOW_MUSHROOM: {
+      // Soft pale-blue mushroom with a glowing cap.
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      // Stem
+      ctx.fillStyle = "#e8e8d8";
+      ctx.fillRect(7, 8, 2, 6);
+      // Cap (dome)
+      ctx.fillStyle = "#a0e0ff";
+      ctx.beginPath();
+      ctx.arc(8, 8, 5, Math.PI, 0);
+      ctx.fill();
+      // Glow highlights
+      ctx.fillStyle = "#e0f5ff";
+      ctx.fillRect(5, 6, 2, 1);
+      ctx.fillRect(10, 5, 2, 1);
+      // Underside gills
+      ctx.fillStyle = "#8090a8";
+      ctx.fillRect(4, 8, 8, 1);
+      break;
+    }
     default: fillNoise(ctx, base, 20); break;
   }
   const tex = new THREE.CanvasTexture(c);

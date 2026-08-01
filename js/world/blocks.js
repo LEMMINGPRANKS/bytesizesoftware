@@ -39,6 +39,8 @@ export const B = {
   SHOVEL_IRON: 64,
   SHOVEL_DIAMOND: 65,
   SHOVEL_PLATINUM: 66,
+  CRYSTAL: 67,
+  GLOW_MUSHROOM: 68,
 };
 
 export const BLOCKS = {
@@ -111,6 +113,8 @@ export const BLOCKS = {
   [B.SHOVEL_IRON]:     { name: "shovel_iron",     solid: false, hardness: 0.1, color: "#dcdcdc", item: true, tool: "shovel", toolTier: 3 },
   [B.SHOVEL_DIAMOND]:  { name: "shovel_diamond",  solid: false, hardness: 0.1, color: "#8af6ff", item: true, tool: "shovel", toolTier: 4 },
   [B.SHOVEL_PLATINUM]: { name: "shovel_platinum", solid: false, hardness: 0.1, color: "#f0f0f8", item: true, tool: "shovel", toolTier: 5 },
+  [B.CRYSTAL]: { name: "crystal", solid: false, hardness: 0.4, color: "#5affe0", transparent: true, decor: true, light: 9 },
+  [B.GLOW_MUSHROOM]: { name: "glow_mushroom", solid: false, hardness: 0.1, color: "#a0e0ff", transparent: true, decor: true, light: 8 },
 };
 
 export const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;

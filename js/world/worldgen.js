@@ -111,6 +111,23 @@ export function generateChunk(cx, cz, noise, world) {
           }
         }
 
+        // Decorative stone veins — granite, marble, basalt ribbons through the
+        // stone layers to make caves visually distinct. Each block has its own
+        // low-frequency noise so the veins don't overlap into a mess.
+        if (id === B.STONE) {
+          const gA = noise.noise3(wx * 0.08 + 11, y * 0.08 + 22, wz * 0.08 + 33);
+          const gB = noise.noise3(wx * 0.18 + 44, y * 0.18 + 55, wz * 0.18 + 66);
+          if (gA > 0.55 && gB > 0.45) id = B.GRANITE;
+          else if (gA < -0.55 && gB < -0.4) {
+            // Marble likes shallower depths (decorative capstone).
+            if (surface - y < 16) id = B.MARBLE;
+          } else {
+            // Basalt likes depth — volcanic dark pockets.
+            const bn = noise.noise3(wx * 0.07 + 700, y * 0.07 + 700, wz * 0.07 + 700);
+            if (bn > 0.6 && surface - y > 14) id = B.BASALT;
+          }
+        }
+
         // Caves: tunnels carved by 3D noise. Two noises multiplied → wormy veins
         // instead of blobs. Only carve below surface so the ground stays solid.
         if (id === B.STONE && y < surface - 2 && y > 1) {
@@ -121,6 +138,29 @@ export function generateChunk(cx, cz, noise, world) {
         // Lava pools: low caves near bedrock flood with lava. Risk-reward for
         // deep mining — diamonds + platinum sit at the same depth.
         if (id === B.AIR && y <= 6) id = B.LAVA;
+        // Vibrant caves: place crystals (deep) and glow mushrooms (shallow) on
+        // cave floors. The cell below is already written because columns are
+        // built bottom-up. We can't have decor in lava, so the y<=6 check above
+        // takes priority.
+        if (id === B.AIR && y > 7 && y < surface - 2) {
+          const below = chunk.blocks[chunk.idx(x, y - 1, z)];
+          const isFloor = below === B.STONE || below === B.COBBLE ||
+                          below === B.GRANITE || below === B.MARBLE ||
+                          below === B.BASALT || below === B.DIRT;
+          if (isFloor) {
+            const depth = surface - y;
+            // Crystals — deep, near diamond depth. Rare clusters.
+            if (depth >= 12 && depth <= 30) {
+              const cn = noise.noise3(wx * 0.4 + 17, y * 0.4 + 23, wz * 0.4 + 31);
+              if (cn > 0.78) id = B.CRYSTAL;
+            }
+            // Glow mushrooms — shallower caves. Sparser, but enough to read.
+            if (id === B.AIR && depth >= 4 && depth < 14) {
+              const mn = noise.noise3(wx * 0.5 + 200, y * 0.5 + 200, wz * 0.5 + 200);
+              if (mn > 0.82) id = B.GLOW_MUSHROOM;
+            }
+          }
+        }
         chunk.blocks[chunk.idx(x, y, z)] = id;
       }
 
