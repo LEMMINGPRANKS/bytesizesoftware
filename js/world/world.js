@@ -88,7 +88,7 @@ export class World {
     const k = this.key(cx, cz);
     let c = this.chunks.get(k);
     if (!c) {
-      c = generateChunk(cx, cz, this.noise);
+      c = generateChunk(cx, cz, this.noise, this);
       this.chunks.set(k, c);
       // Replay any player edits that land inside this chunk.
       if (this.modified.size) {

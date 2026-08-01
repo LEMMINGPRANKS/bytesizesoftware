@@ -13,11 +13,11 @@
   <div id="crosshair"></div>
   <div id="hotbar"></div>
   <div id="status">
-    <span id="fps">0</span> fps · <span id="pos">0,0,0</span>
+    <span id="fps">0</span> fps · <span id="pos">0,0,0</span><span id="mp-room"></span>
   </div>
   <div id="target-info" class="hidden"></div>
 </div>
-<div id="version-tag">1.0</div>
+<div id="version-tag">1.1</div>
 <div id="craft-panel" class="hidden">
   <h2>Crafting</h2>
   <div id="recipe-list"></div>
@@ -49,6 +49,10 @@
   <button id="exit-world-btn">Save &amp; Exit World</button>
   <button id="open-settings-pause">Settings</button>
 </div>
+<div id="mp-chat-log"></div>
+<div id="mp-chat-box" class="hidden">
+  <input id="mp-chat-input" type="text" maxlength="120" placeholder="Press Enter to send, Esc to close" />
+</div>
 <div id="settings-panel" class="hidden">
   <h2>Settings</h2>
   <div class="setting-row">
@@ -79,7 +83,7 @@
 </div>
 <div id="start-screen">
   <h1>Wildcraft</h1>
-  <p>WASD move · Space jump · Mouse look · Left click mine/attack · Right click/Q place/eat/use · 1-9 hotbar · E craft · Tab inventory · R open nearby chest · right-click door to open/close</p>
+  <p>WASD move · Space jump · Mouse look · Left click mine/attack · Right click/Q place/eat/use · 1-9 hotbar · E craft · Tab inventory · R open nearby chest · T chat (MP) · right-click door to open/close</p>
   <h2>Pick a World</h2>
   <div id="world-list"></div>
   <div id="new-world-form" class="hidden">
@@ -96,6 +100,16 @@
   </div>
   <div id="boot-status">Loading…</div>
   <button id="open-settings-start">Settings</button>
+  <hr style="margin-top:18px;border-color:#444;">
+  <h2>Multiplayer</h2>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <button id="mp-host-btn">Host Game</button>
+    <input id="mp-join-code" type="text" maxlength="5" placeholder="CODE" style="text-transform:uppercase;width:90px;font-size:18px;letter-spacing:3px;"></input>
+    <button id="mp-join-btn">Join</button>
+    <button id="mp-leave-btn" class="hidden">Leave</button>
+  </div>
+  <div id="mp-status" style="margin-top:6px;color:#aaa;font-size:14px;"></div>
+  <div id="mp-players" style="margin-top:4px;color:#8c8;font-size:13px;"></div>
 </div>
 <div id="error-overlay" style="position:fixed;bottom:0;left:0;right:0;background:#400;color:#fff;padding:10px;font-family:monospace;font-size:13px;display:none;z-index:100;"></div>
 <script type="importmap">

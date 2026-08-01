@@ -13,7 +13,7 @@ const ORE_TABLE = [
   [B.IRON_ORE,    CONFIG.ores.iron],
 ];
 
-export function generateChunk(cx, cz, noise) {
+export function generateChunk(cx, cz, noise, world) {
   const chunk = new Chunk(cx, cz);
   const baseX = cx * CHUNK_SIZE, baseZ = cz * CHUNK_SIZE;
   const treesHere = [];
@@ -30,12 +30,14 @@ export function generateChunk(cx, cz, noise) {
       const sx = wx + warpX, sz = wz + warpZ;
 
       // ---- Biome selection ----
-      // Low-frequency noise carved into bands. Spawn is forced to normal
-      // temperate within ~120 blocks so day-1 isn't a glacier or vast
-      // desert — those are out there to be discovered.
+      // Very low frequency noise + domain warp → big flowing biomes with
+      // curving boundaries. Spawn is forced to temperate within a radius so
+      // the first day isn't a glacier or vast desert.
       const distFromSpawn = Math.hypot(wx, wz);
-      const biomeNoise = noise.height(sx * BI.freq + 7777, sz * BI.freq - 7777, 3);
-      const adjustedBiome = distFromSpawn < 120
+      const bwx = (noise.height(wx * 0.005 + 555, wz * 0.005, 2) - 0.5) * BI.warpAmp;
+      const bwz = (noise.height(wx * 0.005 - 999, wz * 0.005 + 888, 2) - 0.5) * BI.warpAmp;
+      const biomeNoise = noise.height((wx + bwx) * BI.freq + 7777, (wz + bwz) * BI.freq - 7777, 3);
+      const adjustedBiome = distFromSpawn < BI.spawnSafeRadius
         ? "normal"
         : biomeNoise < BI.iceBand
           ? "ice"

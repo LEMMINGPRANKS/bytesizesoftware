@@ -31,6 +31,7 @@ MODULES = [
     "js/ui/hud.js",
     "js/save/saveManager.js",
     "js/save/settings.js",
+    "js/net/multiplayer.js",
     "js/main.js",
 ]
 
@@ -92,6 +93,14 @@ def main():
     for name in three_exports:
         parts.append(f"  THREE.{name} = typeof {name} !== 'undefined' ? {name} : undefined;")
     parts.append("})(window.THREE);\n")
+
+    # Photon Realtime client SDK — vendored Closure-compiled file. Loaded
+    # BEFORE our module IIFEs so window.Photon is available at init time.
+    photon_path = ROOT / "assets" / "photon-realtime.js"
+    if photon_path.exists():
+        parts.append("// === Photon Realtime SDK (vendored) ===")
+        parts.append(photon_path.read_text())
+        parts.append("")
 
     for m in MODULES:
         parts.append(bundle_file(ROOT / m))

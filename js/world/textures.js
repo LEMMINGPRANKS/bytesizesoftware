@@ -159,23 +159,21 @@ function drawTexture(id, face) {
       // flecks embedded in rock rather than a glowing cluster.
       fillNoise(ctx, hexToRgb("#888"), 18);
       const ore = hexToRgb(baseColor);
-      // Scatter small flecks (1x1 or 2x2) with per-pixel brightness jitter so
-      // each fleck looks like a separate crystal grain, not a flat square.
-      for (let i = 0; i < 14; i++) {
+      // Scatter small (mostly 1x1) darker flecks with brightness jitter so
+      // each fleck looks like a mineral grain, not a flat painted square.
+      // Flecks are darkened toward the ore colour so they read as "darker
+      // stone with a hint of [iron/gold/diamond]" rather than bright paint.
+      for (let i = 0; i < 16; i++) {
         const x = (Math.random() * SIZE) | 0, y = (Math.random() * SIZE) | 0;
-        const w = Math.random() < 0.5 ? 1 : 2;
-        const j = (Math.random() * 2 - 1) * 25;
-        ctx.fillStyle = rgb(
-          Math.max(0, Math.min(255, ore[0] + j)),
-          Math.max(0, Math.min(255, ore[1] + j)),
-          Math.max(0, Math.min(255, ore[2] + j))
-        );
+        const w = Math.random() < 0.75 ? 1 : 2;
+        const j = (Math.random() * 2 - 1) * 18;
+        // Blend 70% ore / 30% stone so the fleck stays stony.
+        const stone = 130;
+        const r = (ore[0] * 0.7 + stone * 0.3) + j;
+        const g = (ore[1] * 0.7 + stone * 0.3) + j;
+        const b = (ore[2] * 0.7 + stone * 0.3) + j;
+        ctx.fillStyle = rgb(r, g, b);
         ctx.fillRect(x, y, w, w);
-        // Tiny highlight on the corner for a specular feel.
-        if (w === 2) {
-          ctx.fillStyle = "rgba(255,255,255,0.25)";
-          ctx.fillRect(x, y, 1, 1);
-        }
       }
       break;
     }

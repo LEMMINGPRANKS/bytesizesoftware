@@ -48,6 +48,55 @@ export function deleteSlot(slot) {
   localStorage.removeItem(KEY(slot));
 }
 
+// ---- Multiplayer saves ----
+// Keyed by room code so rejoining the same code restores your local snapshot
+// (inventory, position, the modified-block delta as you last saw it). Host
+// always starts fresh because hosting mints a new code each click.
+const MP_KEY = (code) => `wildcraft:mp:${code}`;
+
+export function loadMpSave(code) {
+  const raw = localStorage.getItem(MP_KEY(code));
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+export function saveMpSave(code, data) {
+  data.timestamp = Date.now();
+  try {
+    localStorage.setItem(MP_KEY(code), JSON.stringify(data));
+    return true;
+  } catch (e) {
+    console.warn("mp save failed", e);
+    return false;
+  }
+}
+
+export function deleteMpSave(code) {
+  localStorage.removeItem(MP_KEY(code));
+}
+
+// List every MP save (for browsing/deleting in a future settings UI).
+export function listMpSaves() {
+  const out = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k || !k.startsWith("wildcraft:mp:")) continue;
+    const code = k.slice("wildcraft:mp:".length);
+    try {
+      const data = JSON.parse(localStorage.getItem(k));
+      out.push({
+        code,
+        name: data.name || `MP ${code}`,
+        seed: data.seed,
+        timestamp: data.timestamp || 0,
+        editCount: data.modified ? Object.keys(data.modified).length : 0,
+      });
+    } catch { /* skip corrupt */ }
+  }
+  out.sort((a, b) => b.timestamp - a.timestamp);
+  return out;
+}
+
 // ---- Export / Import (single-file portability across browsers) ----
 // Versioned so future migrations can transform old shapes into new ones.
 

@@ -18,8 +18,10 @@ import { atlasUV, getTexture } from "./world/textures.js";
 import {
   listSlots, loadSlot, saveSlot, deleteSlot, MAX_SLOTS,
   exportSlot, importToSlot, exportFilename,
+  loadMpSave, saveMpSave,
 } from "./save/saveManager.js";
 import { getSettings, saveSettings, applySettings, DEFAULTS } from "./save/settings.js";
+const { connect, hostRoom, joinRoom, leaveRoom, callbacks, isConnected, isInRoom, sendBlockEdit, sendPlayerState, sendChat, sendWorldDump, actorName, getLocalActorNr, getLocalName } = window;
 
 const $ = (s) => document.querySelector(s);
 
@@ -95,7 +97,12 @@ async function main() {
   let attackCooldown = 0;
   let creativeMode = false;
   let activeSlot = null;
+  let mpActiveSlot = null; // set when world was launched via Host/Join
+  let mpIsHost = false;    // only host streams world dumps to newcomers
   let lastAutoSave = performance.now();
+  // Remote player avatars: actorNr -> { group, body, head, label, target: Vector3 }
+  const remoteAvatars = new Map();
+  let mpStateAcc = 0; // accumulates dt for 15Hz position broadcast
   // SFX cadence state — kept module-scoped so they survive HUD redraws.
   let footstepAcc = 0;       // horizontal distance walked since last footstep
   let miningTapAcc = 0;      // seconds of active mining since last tap sound
@@ -122,7 +129,7 @@ async function main() {
   function snapshot() {
     return {
       version: 1,
-      name: activeSlot?.name || "World",
+      name: (mpActiveSlot?.name) || activeSlot?.name || "World",
       mode: creativeMode ? "creative" : "survival",
       seed: world.seed,
       player: {
@@ -147,6 +154,10 @@ async function main() {
   }
 
   function doSave() {
+    if (mpActiveSlot) {
+      saveMpSave(mpActiveSlot.name.replace("MP ", ""), snapshot());
+      return;
+    }
     if (activeSlot == null) return;
     saveSlot(activeSlot.slot, snapshot());
   }
@@ -168,8 +179,92 @@ async function main() {
     if (id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DOOR) return "metal";
     return "stone";
   }
+  // MP-aware block setter: writes locally AND broadcasts to the room. Use this
+  // everywhere the local player edits the world so guests/host converge.
+  function mpSetBlock(x, y, z, id) {
+    world.setBlock(x, y, z, id);
+    if (isInRoom()) sendBlockEdit(x, y, z, id);
+  }
+  function mpApplyRemoteBlock(edit) {
+    if (!world) return;
+    world.setBlock(edit.x, edit.y, edit.z, edit.id);
+  }
+  // Spawn / despawn capsule avatars for remote players.
+  function makeNameSprite(text) {
+    const c = document.createElement("canvas");
+    c.width = 256; c.height = 64;
+    const g = c.getContext("2d");
+    g.fillStyle = "rgba(0,0,0,0.55)";
+    g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = "#fff";
+    g.font = "bold 28px sans-serif";
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillText(text, c.width / 2, c.height / 2);
+    const tex = new THREE.CanvasTexture(c);
+    tex.minFilter = THREE.LinearFilter;
+    const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+    const sp = new THREE.Sprite(mat);
+    sp.scale.set(1.2, 0.3, 1);
+    sp.position.set(0, 2.2, 0);
+    return sp;
+  }
+  function spawnRemoteAvatar(actorNr, name) {
+    if (remoteAvatars.has(actorNr)) return;
+    const group = new THREE.Group();
+    const bodyMat = new THREE.MeshLambertMaterial({ color: 0x55aaff });
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 1.1, 4, 8), bodyMat);
+    body.position.y = 0.9;
+    const headMat = new THREE.MeshLambertMaterial({ color: 0xffcc88 });
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 10), headMat);
+    head.position.y = 1.75;
+    // Look dir cone so we can see which way the remote player is facing.
+    const nose = new THREE.Mesh(
+      new THREE.ConeGeometry(0.08, 0.2, 6),
+      new THREE.MeshLambertMaterial({ color: 0x222222 }),
+    );
+    nose.position.set(0, 1.75, -0.35);
+    group.add(body, head, nose, makeNameSprite(name || "Player"));
+    scene.add(group);
+    remoteAvatars.set(actorNr, {
+      group, body, head,
+      target: new THREE.Vector3(0, 0, 0),
+      yaw: 0,
+      active: false,
+    });
+  }
+  function despawnRemoteAvatar(actorNr) {
+    const a = remoteAvatars.get(actorNr);
+    if (!a) return;
+    scene.remove(a.group);
+    a.body.geometry.dispose(); a.head.geometry.dispose();
+    remoteAvatars.delete(actorNr);
+  }
+  function clearAllRemoteAvatars() {
+    for (const id of Array.from(remoteAvatars.keys())) despawnRemoteAvatar(id);
+  }
+  function applyRemotePlayerState(actorNr, st) {
+    let a = remoteAvatars.get(actorNr);
+    // We may receive a state packet before the join callback fires — spawn a
+    // placeholder so the position isn't lost.
+    if (!a) {
+      spawnRemoteAvatar(actorNr, "Player");
+      a = remoteAvatars.get(actorNr);
+    }
+    a.target.set(st.x, st.y, st.z);
+    a.yaw = st.yaw || 0;
+    a.active = true;
+  }
+  function updateRemoteAvatars(dt) {
+    // Lerp avatars toward their target for smooth motion even at low send rates.
+    const k = 1 - Math.pow(0.001, dt);
+    for (const a of remoteAvatars.values()) {
+      a.group.position.lerp(a.target, k);
+      a.group.rotation.y = a.yaw;
+    }
+  }
   function onBreak(kind, id, x, y, z, drop = true) {
-    world.setBlock(x, y, z, B.AIR);
+    mpSetBlock(x, y, z, B.AIR);
     blockBreak(materialOf(id));
     if (drop) inv.add(id, 1);
     // Single wood block: 50% chance to also drop a twig.
@@ -184,11 +279,11 @@ async function main() {
     }
     // Breaking either half of a door drops one door item and clears the other.
     if (id === B.DOOR) {
-      if (world.getBlock(x, y + 1, z) === B.DOOR_TOP) world.setBlock(x, y + 1, z, B.AIR);
+      if (world.getBlock(x, y + 1, z) === B.DOOR_TOP) mpSetBlock(x, y + 1, z, B.AIR);
       world.doors.delete(`${x},${y},${z}`);
     } else if (id === B.DOOR_TOP) {
       if (world.getBlock(x, y - 1, z) === B.DOOR) {
-        world.setBlock(x, y - 1, z, B.AIR);
+        mpSetBlock(x, y - 1, z, B.AIR);
         world.doors.delete(`${x},${y - 1},${z}`);
       }
       // The top half isn't a placeable item — drop a regular door instead.
@@ -223,6 +318,10 @@ async function main() {
     if (def?.food) { eat(sel); return; }
     if (def?.item) return; // don't place tools/items in the world
     if (!t) return;
+    // Raycast returns face=null when the player's eye starts inside a solid
+    // block (e.g. mid-jump inside a door). Without a face we don't know which
+    // neighbour to place into, so just bail.
+    if (!t.face) return;
     const px = t.x + t.face[0], py = t.y + t.face[1], pz = t.z + t.face[2];
     if (py < 0 || py >= CONFIG.world.chunkHeight) return;
     const minX = player.pos.x - player.half, maxX = player.pos.x + player.half;
@@ -237,8 +336,8 @@ async function main() {
       if (py + 1 >= CONFIG.world.chunkHeight) return;
       if (world.getBlock(px, py + 1, pz) !== B.AIR) return;
     }
-    world.setBlock(px, py, pz, sel);
-    if (sel === B.DOOR) world.setBlock(px, py + 1, pz, B.DOOR_TOP);
+    mpSetBlock(px, py, pz, sel);
+    if (sel === B.DOOR) mpSetBlock(px, py + 1, pz, B.DOOR_TOP);
     inv.remove(sel, 1);
     place();
     hud.refresh();
@@ -263,7 +362,8 @@ async function main() {
     if (hunger >= 20) return;
     if (!inv.remove(id, 1)) return;
     hunger = Math.min(20, hunger + def.food);
-    eat();
+    // SFX live on window.eat (shadowed by this local function name).
+    if (typeof window.eat === "function") window.eat();
     hud.setHunger(hunger);
     hud.refresh();
   }
@@ -1019,6 +1119,7 @@ async function main() {
     if (input.justPressed.has("KeyF")) player.toggleFly();
     if (input.justPressed.has("Escape") && chestOpen) closeChest();
     if (input.justPressed.has("Escape") && tradeOpen) closeTrader();
+    if (input.justPressed.has("KeyT") && isInRoom() && !chatOpen && !craftOpen && !invOpen && !chestOpen && !tradeOpen) openChat();
 
     if (craftOpen) {
       refreshCraftIfOpen();
@@ -1141,6 +1242,16 @@ async function main() {
 
     world.update(player.pos.x, player.pos.z);
 
+    // Multiplayer: broadcast our position at ~15Hz and lerp remote avatars.
+    if (isInRoom()) {
+      mpStateAcc += dt;
+      if (mpStateAcc >= 1 / 15) {
+        mpStateAcc = 0;
+        sendPlayerState(player.pos, player.yaw, player.pitch);
+      }
+      updateRemoteAvatars(dt);
+    }
+
     // Auto-save every 30s.
     if (nowMs - lastAutoSave > 30000) {
       lastAutoSave = nowMs;
@@ -1158,6 +1269,182 @@ async function main() {
     input.endFrame();
   });
   loop.start();
+
+  // ---- Multiplayer UI wiring (v1.1) ----
+  // Host/Join lives on the title screen. Connection state is mirrored to a
+  // small status div so the player can see what's happening.
+  const mpStatus = $("#mp-status");
+  const mpPlayers = $("#mp-players");
+  const mpHostBtn = $("#mp-host-btn");
+  const mpJoinBtn = $("#mp-join-btn");
+  const mpLeaveBtn = $("#mp-leave-btn");
+  const mpCodeInput = $("#mp-join-code");
+  const connectedPlayers = new Map(); // actorNr -> name
+
+  function mpSetStatus(msg) { if (mpStatus) mpStatus.textContent = msg; }
+  function mpRefreshPlayers() {
+    if (!mpPlayers) return;
+    if (connectedPlayers.size === 0) { mpPlayers.textContent = ""; return; }
+    const names = Array.from(connectedPlayers.values()).join(", ");
+    mpPlayers.textContent = `In room: ${names}`;
+  }
+
+  // Wire the callbacks so avatar/spawn/despawn hooks can be added later.
+  callbacks.onConnected = () => mpSetStatus("Connected to Photon cloud.");
+  callbacks.onRoomJoined = (roomCode, isHost) => {
+    mpSetStatus(`${isHost ? "Hosting" : "Joined"} room ${roomCode}`);
+    mpHostBtn.disabled = true;
+    mpJoinBtn.disabled = true;
+    mpCodeInput.disabled = true;
+    mpLeaveBtn.classList.remove("hidden");
+  };
+  callbacks.onPlayerEnter = (id, name) => {
+    connectedPlayers.set(id, name);
+    mpRefreshPlayers();
+  };
+  callbacks.onPlayerLeave = (id) => {
+    connectedPlayers.delete(id);
+    mpRefreshPlayers();
+  };
+  const mpRoomEl = $("#mp-room");
+  function mpShowRoomCode(code) {
+    if (mpRoomEl) mpRoomEl.textContent = code ? ` · Room ${code}` : "";
+  }
+  callbacks.onError = (msg) => mpSetStatus(`Error: ${msg}`);
+  callbacks.onStatus = (msg) => mpSetStatus(msg);
+  callbacks.onPlayerEnter = (actorNr, name) => {
+    spawnRemoteAvatar(actorNr, name);
+    connectedPlayers.set(actorNr, name || `Player ${actorNr}`);
+    mpRefreshPlayers();
+    // Host streams the world delta to any newcomer so they see the same
+    // buildings/edits as everyone else. Chunked to stay under the per-event
+    // payload cap; sent on next tick so the joiner's world has time to boot.
+    if (mpIsHost && world) {
+      const entries = Array.from(world.modified.entries())
+        .map(([k, v]) => { const [x, y, z] = k.split(",").map(Number); return { x, y, z, id: v }; });
+      const CHUNK = 400;
+      let seq = 0;
+      for (let i = 0; i < entries.length; i += CHUNK) {
+        const slice = entries.slice(i, i + CHUNK);
+        const done = i + CHUNK >= entries.length;
+        // Stagger slightly so we don't blast the joiner all at once.
+        setTimeout(() => sendWorldDump(slice, seq++, done), 200 + seq * 150);
+      }
+    }
+  };
+  callbacks.onRemoteWorldDump = (data) => {
+    if (!world || !data?.entries) return;
+    for (const e of data.entries) world.setBlock(e.x, e.y, e.z, e.id);
+    if (data.done) mpSetStatus(`World sync complete.`);
+  };
+  callbacks.onPlayerLeave = (actorNr) => {
+    despawnRemoteAvatar(actorNr);
+    connectedPlayers.delete(actorNr);
+    mpRefreshPlayers();
+  };
+  callbacks.onRemoteBlockEdit = (edit) => { mpApplyRemoteBlock(edit); };
+  callbacks.onRemotePlayerState = (st, actorNr) => { applyRemotePlayerState(actorNr, st); };
+  callbacks.onRemoteChat = (text, actorNr) => {
+    if (typeof text !== "string" || !text.trim()) return;
+    pushChat(actorName(actorNr), text.slice(0, 120));
+  };
+
+  // ---- Chat ----
+  const chatLogEl = $("#mp-chat-log");
+  const chatBoxEl = $("#mp-chat-box");
+  const chatInputEl = $("#mp-chat-input");
+  let chatOpen = false;
+  function pushChat(who, text) {
+    if (!chatLogEl) return;
+    const el = document.createElement("div");
+    el.className = "msg";
+    const w = document.createElement("span"); w.className = "who"; w.textContent = who + ":";
+    const t = document.createTextNode(" " + text);
+    el.appendChild(w); el.appendChild(t);
+    chatLogEl.appendChild(el);
+    // Keep the log bounded — old messages fall off as new ones arrive.
+    while (chatLogEl.children.length > 6) chatLogEl.removeChild(chatLogEl.firstChild);
+    setTimeout(() => el.remove(), 8000);
+  }
+  function openChat() {
+    if (!chatBoxEl) return;
+    chatOpen = true;
+    chatBoxEl.classList.remove("hidden");
+    chatInputEl.value = "";
+    chatInputEl.focus();
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+  function closeChat() {
+    chatOpen = false;
+    chatBoxEl.classList.add("hidden");
+    if (gameStarted) input?.requestLock().catch(() => showResume());
+  }
+  function sendChatFromInput() {
+    const text = (chatInputEl.value || "").trim();
+    if (text) {
+      sendChat(text.slice(0, 120));
+      pushChat(getLocalName ? getLocalName() : "Me", text.slice(0, 120));
+    }
+    closeChat();
+  }
+  chatInputEl?.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") { e.preventDefault(); sendChatFromInput(); }
+    else if (e.key === "Escape") { e.preventDefault(); closeChat(); }
+  });
+  // Stop the global keydown handler from firing while typing.
+  chatInputEl?.addEventListener("keyup", (e) => e.stopPropagation());
+
+  mpHostBtn?.addEventListener("click", async () => {
+    mpSetStatus("Connecting…");
+    try {
+      await connect();
+      const seed = (Math.random() * 1e9) | 0;
+      const code2 = await hostRoom(seed);
+      mpSetStatus(`Hosting room ${code2} (seed ${seed})`);
+      mpLeaveBtn?.classList.remove("hidden");
+      mpShowRoomCode(code2);
+      mpIsHost = true;
+      bootWorld("survival", seed, null);
+      mpActiveSlot = { slot: -1, name: `MP ${code2}`, mode: "survival", seed };
+    } catch (e) { mpSetStatus(`Host failed: ${e.message}`); }
+  });
+  mpJoinBtn?.addEventListener("click", async () => {
+    const c = (mpCodeInput.value || "").toUpperCase().trim();
+    if (c.length !== 5) { mpSetStatus("Code must be 5 letters"); return; }
+    mpSetStatus("Connecting…");
+    try {
+      await connect();
+      const r = await joinRoom(c);
+      mpSetStatus(`Joined room ${r.code} (seed ${r.seed ?? "?"})`);
+      mpLeaveBtn?.classList.remove("hidden");
+      mpShowRoomCode(r.code);
+      // Restore local snapshot if we've played in this room before — picks up
+      // inventory, position, and the modified-block delta as we last saw it.
+      const saved = loadMpSave(r.code);
+      const seed = (saved && saved.seed != null) ? saved.seed : (r.seed ?? ((Math.random() * 1e9) | 0));
+      bootWorld("survival", seed, saved);
+      mpActiveSlot = { slot: -1, name: `MP ${r.code}`, mode: "survival", seed };
+      mpIsHost = false;
+    } catch (e) { mpSetStatus(`Join failed: ${e.message}`); }
+  });
+  mpLeaveBtn?.addEventListener("click", () => {
+    doSave(); // persist local MP snapshot before disconnecting
+    leaveRoom();
+    mpIsHost = false;
+    mpShowRoomCode("");
+    connectedPlayers.clear();
+    clearAllRemoteAvatars();
+    mpRefreshPlayers();
+    mpHostBtn.disabled = false;
+    mpJoinBtn.disabled = false;
+    mpCodeInput.disabled = false;
+    mpLeaveBtn.classList.add("hidden");
+    mpSetStatus("Left room.");
+  });
+  mpCodeInput?.addEventListener("input", (e) => {
+    e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, "");
+  });
 
   renderWorldList();
   setStatus("Ready — pick a world or create a new one");
