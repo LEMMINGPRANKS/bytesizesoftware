@@ -41,6 +41,9 @@ export const B = {
   SHOVEL_PLATINUM: 66,
   CRYSTAL: 67,
   GLOW_MUSHROOM: 68,
+  PISTON: 69,
+  STICKY_PISTON: 70,
+  PISTON_HEAD: 71,
 };
 
 export const BLOCKS = {
@@ -115,6 +118,9 @@ export const BLOCKS = {
   [B.SHOVEL_PLATINUM]: { name: "shovel_platinum", solid: false, hardness: 0.1, color: "#f0f0f8", item: true, tool: "shovel", toolTier: 5 },
   [B.CRYSTAL]: { name: "crystal", solid: false, hardness: 0.4, color: "#5affe0", transparent: true, decor: true, light: 9 },
   [B.GLOW_MUSHROOM]: { name: "glow_mushroom", solid: false, hardness: 0.1, color: "#a0e0ff", transparent: true, decor: true, light: 8 },
+  [B.PISTON]: { name: "piston", solid: true, hardness: 1.5, color: "#9c7a4a", interactive: true, piston: true, receiver: true },
+  [B.STICKY_PISTON]: { name: "sticky_piston", solid: true, hardness: 1.5, color: "#4e8050", interactive: true, piston: true, sticky: true, receiver: true },
+  [B.PISTON_HEAD]: { name: "piston_head", solid: false, hardness: 0.5, color: "#c8b070", transparent: true, decor: true, pistonHead: true },
 };
 
 export const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;

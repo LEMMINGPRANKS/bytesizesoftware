@@ -69,6 +69,9 @@ export class World {
     this.levers = new Set();     // modKey of levers currently switched ON
     this.powered = new Set();    // modKey of cells currently powered
     this.powerDirty = false;     // recompute on next tick
+    // Pistons: key -> { facing: [dx,dy,dz], sticky: bool }. State (extended
+    // vs retracted) is inferred from whether a PISTON_HEAD sits in front.
+    this.pistons = new Map();
     // Liquid sim: activeLiquids is the queue of cells to (re)evaluate;
     // liquidLevels stores the flow distance from a source (0 = source).
     this.activeLiquids = new Set();
@@ -121,7 +124,8 @@ export class World {
       for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
         const nx = lx + dx, nz = lz + dz;
         const nb = this.getBlock(nx, ly, nz);
-        if (nb === B.WIRE || nb === B.LAMP) queue.push(`${nx},${ly},${nz}`);
+        if (nb === B.WIRE || nb === B.LAMP ||
+            nb === B.PISTON || nb === B.STICKY_PISTON) queue.push(`${nx},${ly},${nz}`);
       }
     }
     while (queue.length) {
@@ -129,10 +133,10 @@ export class World {
       if (newPowered.has(k)) continue;
       const [x, y, z] = k.split(",").map(Number);
       const id = this.getBlock(x, y, z);
-      if (id !== B.WIRE && id !== B.LAMP) continue;
+      if (id !== B.WIRE && id !== B.LAMP && id !== B.PISTON && id !== B.STICKY_PISTON) continue;
       newPowered.add(k);
       if (id === B.WIRE) {
-        // Spread further from wires only — lamps are sinks.
+        // Spread further from wires only — lamps and pistons are sinks.
         for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
           queue.push(`${x+dx},${y},${z+dz}`);
         }
@@ -169,11 +173,75 @@ export class World {
       const [x, , z] = k.split(",").map(Number);
       this._dirtyChunkAt(x, z);
     }
+    // Pistons: trigger extend/retract on power transitions. A piston is
+    // powered when the cell ITSELF is in the new powered set (i.e. an adjacent
+    // wire/lever reached it). Sticky pistons behave the same on extend; they
+    // pull on retract.
+    for (const [k, p] of this.pistons) {
+      const [x, y, z] = k.split(",").map(Number);
+      const powered = newPowered.has(k);
+      const extended = this.isPistonExtended(x, y, z, p);
+      if (powered && !extended) this.extendPiston(x, y, z, p);
+      else if (!powered && extended) this.retractPiston(x, y, z, p);
+    }
   }
   _dirtyChunkAt(wx, wz) {
     const cx = Math.floor(wx / CHUNK_SIZE), cz = Math.floor(wz / CHUNK_SIZE);
     const c = this.getChunk(cx, cz);
     if (c) c.dirty = true;
+  }
+  // Piston helpers. Pistons remember their facing direction in this.pistons.
+  addPiston(x, y, z, facing, sticky) {
+    this.pistons.set(World.modKey(x, y, z), { facing, sticky });
+  }
+  removePiston(x, y, z) { this.pistons.delete(World.modKey(x, y, z)); }
+  getPiston(x, y, z) { return this.pistons.get(World.modKey(x, y, z)); }
+  isPistonExtended(x, y, z, p) {
+    const [dx, dy, dz] = p.facing;
+    return this.getBlock(x + dx, y + dy, z + dz) === B.PISTON_HEAD;
+  }
+  // Extend a piston: shift the block in front by 1 (if pushable) and place a
+  // PISTON_HEAD in the freed cell. Push chain limit = 1 block for the first
+  // version — no slime-block chain shenanigans yet. Returns true on success.
+  extendPiston(x, y, z, p) {
+    const [dx, dy, dz] = p.facing;
+    const fx = x + dx, fy = y + dy, fz = z + dz;
+    const front = this.getBlock(fx, fy, fz);
+    if (front === B.PISTON_HEAD) return false; // already extended
+    if (front === B.AIR) {
+      this.setBlock(fx, fy, fz, B.PISTON_HEAD);
+      return true;
+    }
+    const def = BLOCKS[front];
+    if (!def || def.hardness === Infinity) return false;   // unpushable (bedrock)
+    if (def.liquid) return false;                          // can't push liquids
+    if (def.piston || def.pistonHead) return false;        // no chaining
+    // Target cell: where the pushed block will land.
+    const tx = fx + dx, ty = fy + dy, tz = fz + dz;
+    const target = this.getBlock(tx, ty, tz);
+    if (target !== B.AIR && !BLOCKS[target]?.liquid) return false;
+    this.setBlock(tx, ty, tz, front);
+    this.setBlock(fx, fy, fz, B.PISTON_HEAD);
+    return true;
+  }
+  // Retract a piston: remove the PISTON_HEAD. Sticky pistons also pull the
+  // block 1 cell past the head back into the head's cell.
+  retractPiston(x, y, z, p) {
+    const [dx, dy, dz] = p.facing;
+    const fx = x + dx, fy = y + dy, fz = z + dz;
+    if (this.getBlock(fx, fy, fz) !== B.PISTON_HEAD) return false;
+    this.setBlock(fx, fy, fz, B.AIR);
+    if (p.sticky) {
+      const sx = fx + dx, sy = fy + dy, sz = fz + dz;
+      const pulled = this.getBlock(sx, sy, sz);
+      const def = pulled !== B.AIR ? BLOCKS[pulled] : null;
+      if (def && def.hardness !== Infinity && !def.liquid &&
+          !def.piston && !def.pistonHead) {
+        this.setBlock(sx, sy, sz, B.AIR);
+        this.setBlock(fx, fy, fz, pulled);
+      }
+    }
+    return true;
   }
   // Door open/closed state. `bx,by,bz` is the BOTTOM block of the door.
   isDoorOpen(bx, by, bz) { return this.doors.has(`${bx},${by},${bz}`); }
@@ -272,10 +340,15 @@ export class World {
     // triggers a re-tick; removing a lever also clears its on-state so a
     // dangling switch doesn't keep powering things after destruction.
     if (v === B.WIRE || v === B.LEVER || v === B.LAMP ||
-        prev === B.WIRE || prev === B.LEVER || prev === B.LAMP) {
+        v === B.PISTON || v === B.STICKY_PISTON ||
+        prev === B.WIRE || prev === B.LEVER || prev === B.LAMP ||
+        prev === B.PISTON || prev === B.STICKY_PISTON) {
       this.powerDirty = true;
       if (prev === B.LEVER) this.levers.delete(k);
       if (prev === B.LAMP) this.torches.delete(k);
+      // Track piston block lifecycle (not PISTON_HEAD — that's managed by the
+      // extend/retract methods themselves).
+      if (prev === B.PISTON || prev === B.STICKY_PISTON) this.removePiston(wx, wy, wz);
     }
     c.set(lx, wy, lz, v);
     this.modified.set(k, v);

@@ -305,7 +305,21 @@ export function buildChunkMesh(chunk, world) {
             layer.positions.push(x + c[0], y + c[1], z + c[2]);
             layer.normals.push(face.dir[0], face.dir[1], face.dir[2]);
           }
-          const [u0, v0, u1, v1] = atlasUV(id, f);
+          // Pistons orient their head texture based on stored facing direction.
+          // atlasUV face index: 2 = top, 3 = bottom, else = side.
+          let atlasFace = f;
+          if (id === B.PISTON || id === B.STICKY_PISTON) {
+            const p = world.getPiston(baseX + x, y, baseZ + z);
+            if (p) {
+              const [fx, fy, fz] = p.facing;
+              const onFront =
+                (fx ===  1 && f === 0) || (fx === -1 && f === 1) ||
+                (fy ===  1 && f === 2) || (fy === -1 && f === 3) ||
+                (fz ===  1 && f === 4) || (fz === -1 && f === 5);
+              atlasFace = onFront ? 2 : (f === 2 || f === 3) ? 3 : 1;
+            }
+          }
+          const [u0, v0, u1, v1] = atlasUV(id, atlasFace);
           // corners are 0..3 in this order; UVs map (0,0)(0,1)(1,1)(1,0).
           layer.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
           layer.indices.push(vIdx, vIdx + 1, vIdx + 2, vIdx, vIdx + 2, vIdx + 3);

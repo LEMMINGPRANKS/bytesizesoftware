@@ -35,6 +35,8 @@ export const RECIPES = [
   { out: [B.GRANITE, 4], in: [{ id: B.STONE, count: 4 }], name: "Granite ×4" },
   { out: [B.MARBLE, 4], in: [{ id: B.STONE, count: 4 }, { id: B.SAND, count: 1 }], name: "Marble ×4" },
   { out: [B.BASALT, 4], in: [{ id: B.COBBLE, count: 4 }], name: "Basalt ×4" },
+  { out: [B.PISTON, 1], in: [{ id: B.PLANKS, count: 3 }, { id: B.IRON_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }], name: "Piston (pushes blocks when powered)" },
+  { out: [B.STICKY_PISTON, 1], in: [{ id: B.PISTON, count: 1 }, { id: B.KELP, count: 2 }], name: "Sticky Piston (pulls blocks back)" },
 ];
 
 // Tool tier hints (informational): wood < stone < iron < gold < diamond < platinum.

@@ -811,6 +811,74 @@ function drawTexture(id, face) {
       ctx.fillRect(4, 8, 8, 1);
       break;
     }
+    case B.PISTON: {
+      // Wooden piston base. Top = head face (visible when retracted and aimed
+      // at you); side = planks with rivets; bottom = plain wood.
+      if (face === "top") {
+        // Head face — a metallic plate with four bolts.
+        fillNoise(ctx, hexToRgb("#b8a070"), 10);
+        ctx.fillStyle = "#888";
+        ctx.fillRect(2, 2, 2, 2);
+        ctx.fillRect(12, 2, 2, 2);
+        ctx.fillRect(2, 12, 2, 2);
+        ctx.fillRect(12, 12, 2, 2);
+        ctx.fillStyle = "#5a4a2a";
+        ctx.fillRect(6, 6, 4, 4);
+      } else if (face === "bottom") {
+        fillNoise(ctx, hexToRgb("#6a4a1a"), 14);
+      } else {
+        // Side: planks + iron bands top and bottom.
+        fillNoise(ctx, hexToRgb("#9c7a4a"), 12);
+        ctx.fillStyle = "#7a6a3a";
+        ctx.fillRect(0, 0, SIZE, 2);
+        ctx.fillRect(0, SIZE - 2, SIZE, 2);
+        ctx.strokeStyle = "rgba(60,40,15,0.6)";
+        ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(SIZE, 8); ctx.stroke();
+      }
+      break;
+    }
+    case B.STICKY_PISTON: {
+      // Same body as piston, but the top face has a green slime layer.
+      if (face === "top") {
+        fillNoise(ctx, hexToRgb("#b8a070"), 10);
+        // Slime cap covering most of the face
+        ctx.fillStyle = "#4e8050";
+        ctx.fillRect(2, 2, SIZE - 4, SIZE - 4);
+        ctx.fillStyle = "#5ea060";
+        ctx.fillRect(3, 3, SIZE - 6, SIZE - 6);
+        // Slime speckle highlights
+        ctx.fillStyle = "#80c080";
+        ctx.fillRect(5, 5, 1, 1);
+        ctx.fillRect(10, 7, 1, 1);
+        ctx.fillRect(7, 10, 1, 1);
+      } else if (face === "bottom") {
+        fillNoise(ctx, hexToRgb("#6a4a1a"), 14);
+      } else {
+        fillNoise(ctx, hexToRgb("#9c7a4a"), 12);
+        ctx.fillStyle = "#4e8050"; // green band — marks it as the sticky one
+        ctx.fillRect(0, 0, SIZE, 2);
+        ctx.fillStyle = "#7a6a3a";
+        ctx.fillRect(0, SIZE - 2, SIZE, 2);
+        ctx.strokeStyle = "rgba(60,40,15,0.6)";
+        ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(SIZE, 8); ctx.stroke();
+      }
+      break;
+    }
+    case B.PISTON_HEAD: {
+      // The extended piston head — iron shaft + plate.
+      ctx.fillStyle = "#c8b070";
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      // Central plate
+      ctx.fillStyle = "#9a8050";
+      ctx.fillRect(2, 2, SIZE - 4, SIZE - 4);
+      // Bolts
+      ctx.fillStyle = "#5a4a2a";
+      ctx.fillRect(3, 3, 1, 1);
+      ctx.fillRect(SIZE - 4, 3, 1, 1);
+      ctx.fillRect(3, SIZE - 4, 1, 1);
+      ctx.fillRect(SIZE - 4, SIZE - 4, 1, 1);
+      break;
+    }
     default: fillNoise(ctx, base, 20); break;
   }
   const tex = new THREE.CanvasTexture(c);

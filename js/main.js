@@ -352,6 +352,31 @@ async function main() {
     if (id === B.TRADER) {
       world.removeTrader(x, y, z);
     }
+    // Mining a piston head should also remove (and drop) the base piston so
+    // the player can dismantle the assembly without leaving a dangling base.
+    if (id === B.PISTON_HEAD) {
+      for (const [dx, dy, dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]) {
+        const nb = world.getBlock(x + dx, y + dy, z + dz);
+        if (nb === B.PISTON || nb === B.STICKY_PISTON) {
+          mpSetBlock(x + dx, y + dy, z + dz, B.AIR);
+          world.removePiston(x + dx, y + dy, z + dz);
+          if (drop) inv.add(nb, 1);
+          break;
+        }
+      }
+    }
+    // Mining the piston base directly also clears any extended head so we
+    // don't leave a floating PISTON_HEAD in the world.
+    if (id === B.PISTON || id === B.STICKY_PISTON) {
+      const p = world.getPiston(x, y, z);
+      if (p) {
+        const [dx, dy, dz] = p.facing;
+        if (world.getBlock(x + dx, y + dy, z + dz) === B.PISTON_HEAD) {
+          mpSetBlock(x + dx, y + dy, z + dz, B.AIR);
+        }
+        world.removePiston(x, y, z);
+      }
+    }
     hud.refresh();
     return true;
   }
@@ -398,6 +423,21 @@ async function main() {
     }
     mpSetBlock(px, py, pz, sel);
     if (sel === B.DOOR) mpSetBlock(px, py + 1, pz, B.DOOR_TOP);
+    // Pistons remember which way they face so extend/retract knows the axis.
+    // The piston faces back at the player (along the dominant horizontal look
+    // axis), so the head pushes toward the player. If the player looks steeply
+    // up/down, switch to a vertical piston.
+    if (sel === B.PISTON || sel === B.STICKY_PISTON) {
+      const look = player.lookDir();
+      let facing;
+      if (Math.abs(look.y) > 0.7) facing = [0, look.y > 0 ? 1 : -1, 0];
+      else {
+        facing = Math.abs(look.x) > Math.abs(look.z)
+          ? [look.x > 0 ? 1 : -1, 0, 0]
+          : [0, 0, look.z > 0 ? 1 : -1];
+      }
+      world.addPiston(px, py, pz, facing, sel === B.STICKY_PISTON);
+    }
     inv.remove(sel, 1);
     place();
     hud.refresh();
@@ -1032,6 +1072,7 @@ async function main() {
     B.WIRE, B.LEVER, B.LAMP,
     B.GRANITE, B.MARBLE, B.BASALT,
     B.CRYSTAL, B.GLOW_MUSHROOM,
+    B.PISTON, B.STICKY_PISTON,
     B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE, B.PLATINUM_ORE,
     B.PICKAXE_WOOD, B.PICKAXE_STONE, B.PICKAXE_IRON, B.PICKAXE_DIAMOND, B.PICKAXE_PLATINUM,
     B.SHOVEL_WOOD, B.SHOVEL_STONE, B.SHOVEL_IRON, B.SHOVEL_DIAMOND, B.SHOVEL_PLATINUM,

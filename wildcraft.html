@@ -54164,6 +54164,9 @@ const B = {
   SHOVEL_PLATINUM: 66,
   CRYSTAL: 67,
   GLOW_MUSHROOM: 68,
+  PISTON: 69,
+  STICKY_PISTON: 70,
+  PISTON_HEAD: 71,
 };
 
 const BLOCKS = {
@@ -54238,6 +54241,9 @@ const BLOCKS = {
   [B.SHOVEL_PLATINUM]: { name: "shovel_platinum", solid: false, hardness: 0.1, color: "#f0f0f8", item: true, tool: "shovel", toolTier: 5 },
   [B.CRYSTAL]: { name: "crystal", solid: false, hardness: 0.4, color: "#5affe0", transparent: true, decor: true, light: 9 },
   [B.GLOW_MUSHROOM]: { name: "glow_mushroom", solid: false, hardness: 0.1, color: "#a0e0ff", transparent: true, decor: true, light: 8 },
+  [B.PISTON]: { name: "piston", solid: true, hardness: 1.5, color: "#9c7a4a", interactive: true, piston: true, receiver: true },
+  [B.STICKY_PISTON]: { name: "sticky_piston", solid: true, hardness: 1.5, color: "#4e8050", interactive: true, piston: true, sticky: true, receiver: true },
+  [B.PISTON_HEAD]: { name: "piston_head", solid: false, hardness: 0.5, color: "#c8b070", transparent: true, decor: true, pistonHead: true },
 };
 
 const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;
@@ -55119,6 +55125,74 @@ function drawTexture(id, face) {
       // Underside gills
       ctx.fillStyle = "#8090a8";
       ctx.fillRect(4, 8, 8, 1);
+      break;
+    }
+    case B.PISTON: {
+      // Wooden piston base. Top = head face (visible when retracted and aimed
+      // at you); side = planks with rivets; bottom = plain wood.
+      if (face === "top") {
+        // Head face — a metallic plate with four bolts.
+        fillNoise(ctx, hexToRgb("#b8a070"), 10);
+        ctx.fillStyle = "#888";
+        ctx.fillRect(2, 2, 2, 2);
+        ctx.fillRect(12, 2, 2, 2);
+        ctx.fillRect(2, 12, 2, 2);
+        ctx.fillRect(12, 12, 2, 2);
+        ctx.fillStyle = "#5a4a2a";
+        ctx.fillRect(6, 6, 4, 4);
+      } else if (face === "bottom") {
+        fillNoise(ctx, hexToRgb("#6a4a1a"), 14);
+      } else {
+        // Side: planks + iron bands top and bottom.
+        fillNoise(ctx, hexToRgb("#9c7a4a"), 12);
+        ctx.fillStyle = "#7a6a3a";
+        ctx.fillRect(0, 0, SIZE, 2);
+        ctx.fillRect(0, SIZE - 2, SIZE, 2);
+        ctx.strokeStyle = "rgba(60,40,15,0.6)";
+        ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(SIZE, 8); ctx.stroke();
+      }
+      break;
+    }
+    case B.STICKY_PISTON: {
+      // Same body as piston, but the top face has a green slime layer.
+      if (face === "top") {
+        fillNoise(ctx, hexToRgb("#b8a070"), 10);
+        // Slime cap covering most of the face
+        ctx.fillStyle = "#4e8050";
+        ctx.fillRect(2, 2, SIZE - 4, SIZE - 4);
+        ctx.fillStyle = "#5ea060";
+        ctx.fillRect(3, 3, SIZE - 6, SIZE - 6);
+        // Slime speckle highlights
+        ctx.fillStyle = "#80c080";
+        ctx.fillRect(5, 5, 1, 1);
+        ctx.fillRect(10, 7, 1, 1);
+        ctx.fillRect(7, 10, 1, 1);
+      } else if (face === "bottom") {
+        fillNoise(ctx, hexToRgb("#6a4a1a"), 14);
+      } else {
+        fillNoise(ctx, hexToRgb("#9c7a4a"), 12);
+        ctx.fillStyle = "#4e8050"; // green band — marks it as the sticky one
+        ctx.fillRect(0, 0, SIZE, 2);
+        ctx.fillStyle = "#7a6a3a";
+        ctx.fillRect(0, SIZE - 2, SIZE, 2);
+        ctx.strokeStyle = "rgba(60,40,15,0.6)";
+        ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(SIZE, 8); ctx.stroke();
+      }
+      break;
+    }
+    case B.PISTON_HEAD: {
+      // The extended piston head — iron shaft + plate.
+      ctx.fillStyle = "#c8b070";
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      // Central plate
+      ctx.fillStyle = "#9a8050";
+      ctx.fillRect(2, 2, SIZE - 4, SIZE - 4);
+      // Bolts
+      ctx.fillStyle = "#5a4a2a";
+      ctx.fillRect(3, 3, 1, 1);
+      ctx.fillRect(SIZE - 4, 3, 1, 1);
+      ctx.fillRect(3, SIZE - 4, 1, 1);
+      ctx.fillRect(SIZE - 4, SIZE - 4, 1, 1);
       break;
     }
     default: fillNoise(ctx, base, 20); break;
@@ -56041,7 +56115,21 @@ function buildChunkMesh(chunk, world) {
             layer.positions.push(x + c[0], y + c[1], z + c[2]);
             layer.normals.push(face.dir[0], face.dir[1], face.dir[2]);
           }
-          const [u0, v0, u1, v1] = atlasUV(id, f);
+          // Pistons orient their head texture based on stored facing direction.
+          // atlasUV face index: 2 = top, 3 = bottom, else = side.
+          let atlasFace = f;
+          if (id === B.PISTON || id === B.STICKY_PISTON) {
+            const p = world.getPiston(baseX + x, y, baseZ + z);
+            if (p) {
+              const [fx, fy, fz] = p.facing;
+              const onFront =
+                (fx ===  1 && f === 0) || (fx === -1 && f === 1) ||
+                (fy ===  1 && f === 2) || (fy === -1 && f === 3) ||
+                (fz ===  1 && f === 4) || (fz === -1 && f === 5);
+              atlasFace = onFront ? 2 : (f === 2 || f === 3) ? 3 : 1;
+            }
+          }
+          const [u0, v0, u1, v1] = atlasUV(id, atlasFace);
           // corners are 0..3 in this order; UVs map (0,0)(0,1)(1,1)(1,0).
           layer.uvs.push(u0, v0, u0, v1, u1, v1, u1, v0);
           layer.indices.push(vIdx, vIdx + 1, vIdx + 2, vIdx, vIdx + 2, vIdx + 3);
@@ -56252,6 +56340,9 @@ class World {
     this.levers = new Set();     // modKey of levers currently switched ON
     this.powered = new Set();    // modKey of cells currently powered
     this.powerDirty = false;     // recompute on next tick
+    // Pistons: key -> { facing: [dx,dy,dz], sticky: bool }. State (extended
+    // vs retracted) is inferred from whether a PISTON_HEAD sits in front.
+    this.pistons = new Map();
     // Liquid sim: activeLiquids is the queue of cells to (re)evaluate;
     // liquidLevels stores the flow distance from a source (0 = source).
     this.activeLiquids = new Set();
@@ -56304,7 +56395,8 @@ class World {
       for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
         const nx = lx + dx, nz = lz + dz;
         const nb = this.getBlock(nx, ly, nz);
-        if (nb === B.WIRE || nb === B.LAMP) queue.push(`${nx},${ly},${nz}`);
+        if (nb === B.WIRE || nb === B.LAMP ||
+            nb === B.PISTON || nb === B.STICKY_PISTON) queue.push(`${nx},${ly},${nz}`);
       }
     }
     while (queue.length) {
@@ -56312,10 +56404,10 @@ class World {
       if (newPowered.has(k)) continue;
       const [x, y, z] = k.split(",").map(Number);
       const id = this.getBlock(x, y, z);
-      if (id !== B.WIRE && id !== B.LAMP) continue;
+      if (id !== B.WIRE && id !== B.LAMP && id !== B.PISTON && id !== B.STICKY_PISTON) continue;
       newPowered.add(k);
       if (id === B.WIRE) {
-        // Spread further from wires only — lamps are sinks.
+        // Spread further from wires only — lamps and pistons are sinks.
         for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
           queue.push(`${x+dx},${y},${z+dz}`);
         }
@@ -56352,11 +56444,75 @@ class World {
       const [x, , z] = k.split(",").map(Number);
       this._dirtyChunkAt(x, z);
     }
+    // Pistons: trigger extend/retract on power transitions. A piston is
+    // powered when the cell ITSELF is in the new powered set (i.e. an adjacent
+    // wire/lever reached it). Sticky pistons behave the same on extend; they
+    // pull on retract.
+    for (const [k, p] of this.pistons) {
+      const [x, y, z] = k.split(",").map(Number);
+      const powered = newPowered.has(k);
+      const extended = this.isPistonExtended(x, y, z, p);
+      if (powered && !extended) this.extendPiston(x, y, z, p);
+      else if (!powered && extended) this.retractPiston(x, y, z, p);
+    }
   }
   _dirtyChunkAt(wx, wz) {
     const cx = Math.floor(wx / CHUNK_SIZE), cz = Math.floor(wz / CHUNK_SIZE);
     const c = this.getChunk(cx, cz);
     if (c) c.dirty = true;
+  }
+  // Piston helpers. Pistons remember their facing direction in this.pistons.
+  addPiston(x, y, z, facing, sticky) {
+    this.pistons.set(World.modKey(x, y, z), { facing, sticky });
+  }
+  removePiston(x, y, z) { this.pistons.delete(World.modKey(x, y, z)); }
+  getPiston(x, y, z) { return this.pistons.get(World.modKey(x, y, z)); }
+  isPistonExtended(x, y, z, p) {
+    const [dx, dy, dz] = p.facing;
+    return this.getBlock(x + dx, y + dy, z + dz) === B.PISTON_HEAD;
+  }
+  // Extend a piston: shift the block in front by 1 (if pushable) and place a
+  // PISTON_HEAD in the freed cell. Push chain limit = 1 block for the first
+  // version — no slime-block chain shenanigans yet. Returns true on success.
+  extendPiston(x, y, z, p) {
+    const [dx, dy, dz] = p.facing;
+    const fx = x + dx, fy = y + dy, fz = z + dz;
+    const front = this.getBlock(fx, fy, fz);
+    if (front === B.PISTON_HEAD) return false; // already extended
+    if (front === B.AIR) {
+      this.setBlock(fx, fy, fz, B.PISTON_HEAD);
+      return true;
+    }
+    const def = BLOCKS[front];
+    if (!def || def.hardness === Infinity) return false;   // unpushable (bedrock)
+    if (def.liquid) return false;                          // can't push liquids
+    if (def.piston || def.pistonHead) return false;        // no chaining
+    // Target cell: where the pushed block will land.
+    const tx = fx + dx, ty = fy + dy, tz = fz + dz;
+    const target = this.getBlock(tx, ty, tz);
+    if (target !== B.AIR && !BLOCKS[target]?.liquid) return false;
+    this.setBlock(tx, ty, tz, front);
+    this.setBlock(fx, fy, fz, B.PISTON_HEAD);
+    return true;
+  }
+  // Retract a piston: remove the PISTON_HEAD. Sticky pistons also pull the
+  // block 1 cell past the head back into the head's cell.
+  retractPiston(x, y, z, p) {
+    const [dx, dy, dz] = p.facing;
+    const fx = x + dx, fy = y + dy, fz = z + dz;
+    if (this.getBlock(fx, fy, fz) !== B.PISTON_HEAD) return false;
+    this.setBlock(fx, fy, fz, B.AIR);
+    if (p.sticky) {
+      const sx = fx + dx, sy = fy + dy, sz = fz + dz;
+      const pulled = this.getBlock(sx, sy, sz);
+      const def = pulled !== B.AIR ? BLOCKS[pulled] : null;
+      if (def && def.hardness !== Infinity && !def.liquid &&
+          !def.piston && !def.pistonHead) {
+        this.setBlock(sx, sy, sz, B.AIR);
+        this.setBlock(fx, fy, fz, pulled);
+      }
+    }
+    return true;
   }
   // Door open/closed state. `bx,by,bz` is the BOTTOM block of the door.
   isDoorOpen(bx, by, bz) { return this.doors.has(`${bx},${by},${bz}`); }
@@ -56455,10 +56611,15 @@ class World {
     // triggers a re-tick; removing a lever also clears its on-state so a
     // dangling switch doesn't keep powering things after destruction.
     if (v === B.WIRE || v === B.LEVER || v === B.LAMP ||
-        prev === B.WIRE || prev === B.LEVER || prev === B.LAMP) {
+        v === B.PISTON || v === B.STICKY_PISTON ||
+        prev === B.WIRE || prev === B.LEVER || prev === B.LAMP ||
+        prev === B.PISTON || prev === B.STICKY_PISTON) {
       this.powerDirty = true;
       if (prev === B.LEVER) this.levers.delete(k);
       if (prev === B.LAMP) this.torches.delete(k);
+      // Track piston block lifecycle (not PISTON_HEAD — that's managed by the
+      // extend/retract methods themselves).
+      if (prev === B.PISTON || prev === B.STICKY_PISTON) this.removePiston(wx, wy, wz);
     }
     c.set(lx, wy, lz, v);
     this.modified.set(k, v);
@@ -57654,6 +57815,8 @@ const RECIPES = [
   { out: [B.GRANITE, 4], in: [{ id: B.STONE, count: 4 }], name: "Granite ×4" },
   { out: [B.MARBLE, 4], in: [{ id: B.STONE, count: 4 }, { id: B.SAND, count: 1 }], name: "Marble ×4" },
   { out: [B.BASALT, 4], in: [{ id: B.COBBLE, count: 4 }], name: "Basalt ×4" },
+  { out: [B.PISTON, 1], in: [{ id: B.PLANKS, count: 3 }, { id: B.IRON_BLOCK, count: 1 }, { id: B.TWIG, count: 1 }], name: "Piston (pushes blocks when powered)" },
+  { out: [B.STICKY_PISTON, 1], in: [{ id: B.PISTON, count: 1 }, { id: B.KELP, count: 2 }], name: "Sticky Piston (pulls blocks back)" },
 ];
 
 // Tool tier hints (informational): wood < stone < iron < gold < diamond < platinum.
@@ -59257,6 +59420,31 @@ async function main() {
     if (id === B.TRADER) {
       world.removeTrader(x, y, z);
     }
+    // Mining a piston head should also remove (and drop) the base piston so
+    // the player can dismantle the assembly without leaving a dangling base.
+    if (id === B.PISTON_HEAD) {
+      for (const [dx, dy, dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]) {
+        const nb = world.getBlock(x + dx, y + dy, z + dz);
+        if (nb === B.PISTON || nb === B.STICKY_PISTON) {
+          mpSetBlock(x + dx, y + dy, z + dz, B.AIR);
+          world.removePiston(x + dx, y + dy, z + dz);
+          if (drop) inv.add(nb, 1);
+          break;
+        }
+      }
+    }
+    // Mining the piston base directly also clears any extended head so we
+    // don't leave a floating PISTON_HEAD in the world.
+    if (id === B.PISTON || id === B.STICKY_PISTON) {
+      const p = world.getPiston(x, y, z);
+      if (p) {
+        const [dx, dy, dz] = p.facing;
+        if (world.getBlock(x + dx, y + dy, z + dz) === B.PISTON_HEAD) {
+          mpSetBlock(x + dx, y + dy, z + dz, B.AIR);
+        }
+        world.removePiston(x, y, z);
+      }
+    }
     hud.refresh();
     return true;
   }
@@ -59303,6 +59491,21 @@ async function main() {
     }
     mpSetBlock(px, py, pz, sel);
     if (sel === B.DOOR) mpSetBlock(px, py + 1, pz, B.DOOR_TOP);
+    // Pistons remember which way they face so extend/retract knows the axis.
+    // The piston faces back at the player (along the dominant horizontal look
+    // axis), so the head pushes toward the player. If the player looks steeply
+    // up/down, switch to a vertical piston.
+    if (sel === B.PISTON || sel === B.STICKY_PISTON) {
+      const look = player.lookDir();
+      let facing;
+      if (Math.abs(look.y) > 0.7) facing = [0, look.y > 0 ? 1 : -1, 0];
+      else {
+        facing = Math.abs(look.x) > Math.abs(look.z)
+          ? [look.x > 0 ? 1 : -1, 0, 0]
+          : [0, 0, look.z > 0 ? 1 : -1];
+      }
+      world.addPiston(px, py, pz, facing, sel === B.STICKY_PISTON);
+    }
     inv.remove(sel, 1);
     place();
     hud.refresh();
@@ -59937,6 +60140,7 @@ async function main() {
     B.WIRE, B.LEVER, B.LAMP,
     B.GRANITE, B.MARBLE, B.BASALT,
     B.CRYSTAL, B.GLOW_MUSHROOM,
+    B.PISTON, B.STICKY_PISTON,
     B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE, B.PLATINUM_ORE,
     B.PICKAXE_WOOD, B.PICKAXE_STONE, B.PICKAXE_IRON, B.PICKAXE_DIAMOND, B.PICKAXE_PLATINUM,
     B.SHOVEL_WOOD, B.SHOVEL_STONE, B.SHOVEL_IRON, B.SHOVEL_DIAMOND, B.SHOVEL_PLATINUM,
