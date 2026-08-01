@@ -287,22 +287,6 @@ export function generateChunk(cx, cz, noise, world) {
       chunk.blocks[chunk.idx(c.x, c.y + i, c.z)] = B.CACTUS;
   }
 
-  for (const t of treesHere) {
-    if (t.y + t.height >= CHUNK_HEIGHT) continue;
-    for (let i = 0; i < t.height; i++) chunk.blocks[chunk.idx(t.x, t.y + i, t.z)] = B.WOOD;
-    // Leaves: a 5x5x3 blob at top.
-    const top = t.y + t.height - 1;
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dx = -2; dx <= 2; dx++)
-        for (let dz = -2; dz <= 2; dz++) {
-          if (Math.abs(dx) + Math.abs(dz) + Math.abs(dy) > 4) continue;
-          const lx = t.x + dx, ly = top + dy, lz = t.z + dz;
-          if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE) continue;
-          if (chunk.blocks[chunk.idx(lx, ly, lz)] === B.AIR)
-            chunk.blocks[chunk.idx(lx, ly, lz)] = B.LEAVES;
-        }
-  }
-
   // Trading house: rare, deterministic structure (~1 per 250 blocks).
   tryPlaceTradingHouse(chunk, baseX, baseZ, noise);
 
