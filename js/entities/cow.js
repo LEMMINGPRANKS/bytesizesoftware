@@ -69,6 +69,7 @@ export class Cow {
     this.yaw = Math.random() * Math.PI * 2;
     this.health = 10;
     this.fleeing = 0;
+    this.hitFlash = 0;
     this.state = "idle";
     this.stateT = 1 + Math.random() * 3;
     this.width = 0.7;
@@ -132,6 +133,7 @@ export class Cow {
     if (!this.alive) return;
     this.health -= dmg;
     this.fleeing = 3;
+    this.hitFlash = 0.15;
     // Flee direction away from attacker.
     const dx = this.pos.x - fromPos.x, dz = this.pos.z - fromPos.z;
     const len = Math.hypot(dx, dz) || 1;
@@ -154,6 +156,7 @@ export class Cow {
       return this.deathT > 0;
     }
 
+    this.hitFlash = Math.max(0, this.hitFlash - dt);
     this.stateT -= dt;
     this.fleeing = Math.max(0, this.fleeing - dt);
 
@@ -225,6 +228,13 @@ export class Cow {
         leg.position.y = leg.userData.baseY + Math.sin(t + leg.userData.phase) * 0.06;
       }
     }
+    // Hit flash: tint body red briefly when hurt.
+    const flashing = this.hitFlash > 0;
+    this.group.traverse(o => {
+      if (o.material && o.material.emissive !== undefined && !o.material.isMeshBasicMaterial) {
+        o.material.emissive.setHex(flashing ? 0x551010 : 0x000000);
+      }
+    });
     return true;
   }
 

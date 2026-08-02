@@ -581,6 +581,7 @@ async function main() {
     if (cow) {
       const wasAlive = cow.alive;
       cow.hit(cow.isFish ? 4 : 4, player.pos);
+      if (typeof window.hurt === "function") window.hurt();
       if (wasAlive && !cow.alive) {
         if (cow.isFish) {
           inv.add(B.RAW_FISH, 1);

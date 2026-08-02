@@ -17,6 +17,7 @@ export class Fish {
     this.vel = new THREE.Vector3();
     this.yaw = Math.random() * Math.PI * 2;
     this.health = 4;
+    this.hitFlash = 0;
     this.state = "swim";
     this.stateT = 1 + Math.random() * 3;
     this.width = 0.4;
@@ -44,6 +45,7 @@ export class Fish {
   hit(dmg) {
     if (!this.alive) return;
     this.health -= dmg;
+    this.hitFlash = 0.15;
     if (this.health <= 0) { this.alive = false; this.deathT = 0.8; }
   }
 
@@ -97,6 +99,14 @@ export class Fish {
     this.group.position.copy(this.pos);
     this.group.rotation.y = -this.yaw + Math.PI / 2;
     if (this.tail) this.tail.rotation.y = Math.sin(performance.now() * 0.012) * 0.4;
+    // Hit flash: tint body red briefly when hurt.
+    this.hitFlash = Math.max(0, this.hitFlash - dt);
+    const flashing = this.hitFlash > 0;
+    this.group.traverse(o => {
+      if (o.material && o.material.emissive !== undefined && !o.material.isMeshBasicMaterial) {
+        o.material.emissive.setHex(flashing ? 0x551010 : 0x000000);
+      }
+    });
     return true;
   }
 
