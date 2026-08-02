@@ -83,9 +83,18 @@ export class MiningController {
     const softBlock = def.name === "dirt" || def.name === "sand" ||
                       def.name === "grass" || def.name === "snow" ||
                       def.name === "moon_dust";
+    // Axe bonus: wood, planks, beams, wood walls, chests, doors, cactus,
+    // kelp — any woody/plant block chops faster with an axe.
+    const woodyBlock = def.name === "wood" || def.name === "planks" ||
+                       def.name === "beam" || def.name === "wall_wood" ||
+                       def.name === "chest" || def.name === "door" ||
+                       def.name === "cactus" || def.name === "kelp" ||
+                       def.name === "leaves" || def.name === "twig";
     const toolMul = selDef?.tool === "shovel" && softBlock
       ? 3.0
-      : (selDef?.tool === "pickaxe" && selDef?.toolTier >= (def.toolTier || 0) ? 2.2 : 1.0);
+      : selDef?.tool === "axe" && woodyBlock
+        ? 3.0
+        : (selDef?.tool === "pickaxe" && selDef?.toolTier >= (def.toolTier || 0) ? 2.2 : 1.0);
     const time = def.hardness * CONFIG.mining.baseTime / toolMul;
     if (this.progress >= time) {
       // Tool-tier gate: can't break protected blocks without the right pickaxe.

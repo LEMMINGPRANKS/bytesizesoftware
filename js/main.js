@@ -560,10 +560,11 @@ async function main() {
         if (closestPt.distanceTo(bc) < 1.4) {
           const wasAlive = bossGolem.alive;
           const carried = getCarried();
-          // Tool-tier damage: pickaxes hurt more; platinum pickaxe hurts most.
+          // Tool-tier damage: swords/axes/pickaxes/shovels all hit, swords strongest.
           let dmg = 4;
           const carriedDef = carried !== null ? BLOCKS[carried] : null;
-          if (carriedDef?.toolTier) dmg = 4 + carriedDef.toolTier * 2;
+          if (carriedDef?.dmg) dmg = carriedDef.dmg;
+          else if (carriedDef?.toolTier) dmg = 4 + carriedDef.toolTier * 2;
           bossGolem.hit(dmg, player.pos);
           if (wasAlive && !bossGolem.alive) {
             // Trophy drop + victory flag.
@@ -580,10 +581,12 @@ async function main() {
     const cow = mobs.raycast(origin, dir, CONFIG.mining.range + 1);
     if (cow) {
       const wasAlive = cow.alive;
-      // Tool-tier damage: sword-equivalent = held pickaxe/shovel of any tier.
+      // Tool-tier damage: swords/axes/pickaxes/shovels all hit; swords strongest.
       const carried = getCarried();
       const carriedDef = carried !== null ? BLOCKS[carried] : null;
-      const dmg = carriedDef?.toolTier ? 4 + carriedDef.toolTier * 2 : 4;
+      const dmg = carriedDef?.dmg
+        ? carriedDef.dmg
+        : (carriedDef?.toolTier ? 4 + carriedDef.toolTier * 2 : 4);
       cow.hit(cow.isFish ? 4 : dmg, player.pos);
       if (typeof window.hurt === "function") window.hurt();
       if (wasAlive && !cow.alive) {
@@ -1118,6 +1121,8 @@ async function main() {
     B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE, B.PLATINUM_ORE,
     B.PICKAXE_WOOD, B.PICKAXE_STONE, B.PICKAXE_IRON, B.PICKAXE_DIAMOND, B.PICKAXE_PLATINUM,
     B.SHOVEL_WOOD, B.SHOVEL_STONE, B.SHOVEL_IRON, B.SHOVEL_DIAMOND, B.SHOVEL_PLATINUM,
+    B.SWORD_WOOD, B.SWORD_STONE, B.SWORD_IRON, B.SWORD_DIAMOND, B.SWORD_PLATINUM,
+    B.AXE_WOOD, B.AXE_STONE, B.AXE_IRON, B.AXE_DIAMOND, B.AXE_PLATINUM,
     B.RAW_BEEF, B.COOKED_BEEF, B.RAW_FISH, B.COOKED_FISH,
     B.BUCKET, B.WATER_BUCKET, B.LAVA_BUCKET,
   ];

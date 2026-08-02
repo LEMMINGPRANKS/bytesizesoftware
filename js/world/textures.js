@@ -407,6 +407,66 @@ function drawTexture(id, face) {
       ctx.fillRect(11, 5, 1, 2);
       break;
     }
+    case B.SWORD_WOOD:
+    case B.SWORD_STONE:
+    case B.SWORD_IRON:
+    case B.SWORD_DIAMOND:
+    case B.SWORD_PLATINUM: {
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      const blade = baseColor || "#ccc";
+      // Blade — long, straight, pointed tip.
+      ctx.fillStyle = blade;
+      ctx.beginPath();
+      ctx.moveTo(8, 2);
+      ctx.lineTo(10, 3);
+      ctx.lineTo(10, 11);
+      ctx.lineTo(6, 11);
+      ctx.lineTo(6, 3);
+      ctx.closePath();
+      ctx.fill();
+      // Blade highlight (fuller line).
+      ctx.fillStyle = "rgba(255,255,255,0.5)";
+      ctx.fillRect(7, 4, 1, 6);
+      // Cross-guard.
+      ctx.fillStyle = "#6a4a2a";
+      ctx.fillRect(4, 11, 8, 1);
+      // Handle.
+      ctx.fillStyle = "#3a2a1a";
+      ctx.fillRect(6, 12, 4, 3);
+      // Pommel.
+      ctx.fillStyle = "#6a4a2a";
+      ctx.fillRect(7, 15, 2, 1);
+      break;
+    }
+    case B.AXE_WOOD:
+    case B.AXE_STONE:
+    case B.AXE_IRON:
+    case B.AXE_DIAMOND:
+    case B.AXE_PLATINUM: {
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      const head = baseColor || "#888";
+      // Handle (wood) — diagonal.
+      ctx.strokeStyle = "#6a4a2a";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(4, 14);
+      ctx.lineTo(13, 5);
+      ctx.stroke();
+      // Axe head — chunky wedge at top-right.
+      ctx.fillStyle = head;
+      ctx.beginPath();
+      ctx.moveTo(8, 2);
+      ctx.lineTo(14, 3);
+      ctx.lineTo(15, 7);
+      ctx.lineTo(13, 9);
+      ctx.lineTo(9, 6);
+      ctx.closePath();
+      ctx.fill();
+      // Bite highlight (edge).
+      ctx.fillStyle = "rgba(255,255,255,0.4)";
+      ctx.fillRect(13, 4, 1, 4);
+      break;
+    }
     case B.WATER: {
       ctx.clearRect(0, 0, SIZE, SIZE);
       // Depth gradient: lighter near surface, darker depths.

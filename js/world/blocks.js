@@ -46,6 +46,16 @@ export const B = {
   PISTON_HEAD: 71,
   ROTTEN_FLESH: 72,
   BONE: 73,
+  SWORD_WOOD: 74,
+  SWORD_STONE: 75,
+  SWORD_IRON: 76,
+  SWORD_DIAMOND: 77,
+  SWORD_PLATINUM: 78,
+  AXE_WOOD: 79,
+  AXE_STONE: 80,
+  AXE_IRON: 81,
+  AXE_DIAMOND: 82,
+  AXE_PLATINUM: 83,
 };
 
 export const BLOCKS = {
@@ -125,6 +135,16 @@ export const BLOCKS = {
   [B.PISTON_HEAD]: { name: "piston_head", solid: false, hardness: 0.5, color: "#c8b070", transparent: true, decor: true, pistonHead: true },
   [B.ROTTEN_FLESH]: { name: "rotten_flesh", solid: false, hardness: 0.1, color: "#7a4a4a", item: true, food: 1 },
   [B.BONE]: { name: "bone", solid: false, hardness: 0.1, color: "#e8e0c8", item: true },
+  [B.SWORD_WOOD]:     { name: "sword_wood",     solid: false, hardness: 0.1, color: "#a07a3a", item: true, tool: "sword", toolTier: 1, dmg: 8 },
+  [B.SWORD_STONE]:    { name: "sword_stone",    solid: false, hardness: 0.1, color: "#9a9a9a", item: true, tool: "sword", toolTier: 2, dmg: 10 },
+  [B.SWORD_IRON]:     { name: "sword_iron",     solid: false, hardness: 0.1, color: "#dcdcdc", item: true, tool: "sword", toolTier: 3, dmg: 13 },
+  [B.SWORD_DIAMOND]:  { name: "sword_diamond",  solid: false, hardness: 0.1, color: "#8af6ff", item: true, tool: "sword", toolTier: 4, dmg: 16 },
+  [B.SWORD_PLATINUM]: { name: "sword_platinum", solid: false, hardness: 0.1, color: "#f0f0f8", item: true, tool: "sword", toolTier: 5, dmg: 20 },
+  [B.AXE_WOOD]:     { name: "axe_wood",     solid: false, hardness: 0.1, color: "#a07a3a", item: true, tool: "axe", toolTier: 1, dmg: 5 },
+  [B.AXE_STONE]:    { name: "axe_stone",    solid: false, hardness: 0.1, color: "#9a9a9a", item: true, tool: "axe", toolTier: 2, dmg: 7 },
+  [B.AXE_IRON]:     { name: "axe_iron",     solid: false, hardness: 0.1, color: "#dcdcdc", item: true, tool: "axe", toolTier: 3, dmg: 9 },
+  [B.AXE_DIAMOND]:  { name: "axe_diamond",  solid: false, hardness: 0.1, color: "#8af6ff", item: true, tool: "axe", toolTier: 4, dmg: 11 },
+  [B.AXE_PLATINUM]: { name: "axe_platinum", solid: false, hardness: 0.1, color: "#f0f0f8", item: true, tool: "axe", toolTier: 5, dmg: 14 },
 };
 
 export const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;
