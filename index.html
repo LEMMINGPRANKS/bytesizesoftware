@@ -131,6 +131,13 @@ section { padding: 80px 24px; }
 
 .run-note { font-size: 13px; color: #888; }
 .run-note strong { color: #555; }
+.whats-new { background: #f8f5ff; border: 1px solid #e4dbff; border-radius: 10px; padding: 16px 20px; }
+.whats-new .wn-label { font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: #7744cc; margin-bottom: 6px; }
+.whats-new p { font-size: 14px; color: #555; margin: 0; }
+.wn-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.wn-list li { font-size: 14px; color: #555; padding-left: 18px; position: relative; }
+.wn-list li::before { content: "\2022"; color: #7744cc; position: absolute; left: 4px; font-weight: 700; }
+.wn-list strong { color: #2a2a2a; font-weight: 600; }
 
 /* ---------- FEATURES ---------- */
 .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
@@ -265,12 +272,12 @@ footer a:hover { color: #555; }
       </div>
 
       <div class="project-card card-purple">
-        <div><span class="project-tag tag-purple">v1.2.0 &mdash; Windows &amp; Linux</span></div>
+        <div><span class="project-tag tag-purple">v26.8.1 &mdash; Windows &amp; Linux</span></div>
         <h2>Wildcraft</h2>
-        <p>A voxel sandbox game. Build, mine, and explore a blocky world. Portable builds for both platforms &mdash; nothing to install.</p>
+        <p>A voxel sandbox game. Mine, craft, fight, and wire up contraptions &mdash; then travel to the Moon to face the final boss. Portable builds for both platforms.</p>
         <div class="card-actions">
-          <a href="https://github.com/LemmingPranks/bytesizesoftware/releases/download/1.2/Wildcraft-1.2.0-win.exe" download><button class="btn-download dl-purple">Download for Windows</button></a>
-          <a href="https://github.com/LemmingPranks/bytesizesoftware/releases/download/1.2/Wildcraft-1.2.0-linux.AppImage" download><button class="btn-download dl-purple">Download for Linux</button></a>
+          <a href="https://github.com/LemmingPranks/bytesizesoftware/releases/download/v26.8.1/Wildcraft-26.8.1-win.exe" download><button class="btn-download dl-purple">Download for Windows</button></a>
+          <a href="https://github.com/LemmingPranks/bytesizesoftware/releases/download/v26.8.1/Wildcraft-26.8.1-linux.AppImage" download><button class="btn-download dl-purple">Download for Linux</button></a>
           <a href="#games"><button class="btn-secondary">Learn more</button></a>
         </div>
       </div>
@@ -433,15 +440,26 @@ footer a:hover { color: #555; }
 
     <div class="projects-grid">
       <div class="project-card card-purple">
-        <div><span class="project-tag tag-purple">v1.2.0 &mdash; Windows &amp; Linux</span></div>
+        <div><span class="project-tag tag-purple">v26.8.1 &mdash; Windows &amp; Linux</span></div>
         <h2>Wildcraft</h2>
-        <p>A voxel sandbox game. Build, mine, and explore a blocky world &mdash; now with a moon in the night sky. Both builds are fully portable with everything bundled in, so there is nothing to install and no dependencies to chase.</p>
+        <p>A voxel sandbox game. Mine and build across a blocky world, fight off enemies with swords and axes, wire up piston contraptions, and travel to the Moon to take on the final boss. Both builds are fully portable with everything bundled in, so there is nothing to install and no dependencies to chase.</p>
+        <div class="whats-new">
+          <div class="wn-label">New in 26.8.1</div>
+          <p>Axes and swords, pistons and wiring, new enemies, new blocks &mdash; and plenty more to do with all of it.</p>
+          <ul class="wn-list">
+            <li><strong>Combat</strong> &mdash; swords and axes as proper tools and weapons</li>
+            <li><strong>Redstone-style wiring</strong> &mdash; pistons and wires for contraptions</li>
+            <li><strong>More enemies</strong> &mdash; new threats across the world</li>
+            <li><strong>More blocks</strong> &mdash; a wider palette to build with</li>
+            <li><strong>The Moon</strong> &mdash; a whole dimension, home to the final boss</li>
+          </ul>
+        </div>
         <div class="card-actions">
-          <a href="https://github.com/LemmingPranks/bytesizesoftware/releases/download/1.2/Wildcraft-1.2.0-win.exe" download><button class="btn-download dl-purple">Download for Windows</button></a>
-          <a href="https://github.com/LemmingPranks/bytesizesoftware/releases/download/1.2/Wildcraft-1.2.0-linux.AppImage" download><button class="btn-download dl-purple">Download for Linux</button></a>
+          <a href="https://github.com/LemmingPranks/bytesizesoftware/releases/download/v26.8.1/Wildcraft-26.8.1-win.exe" download><button class="btn-download dl-purple">Download for Windows</button></a>
+          <a href="https://github.com/LemmingPranks/bytesizesoftware/releases/download/v26.8.1/Wildcraft-26.8.1-linux.AppImage" download><button class="btn-download dl-purple">Download for Linux</button></a>
         </div>
         <div class="run-note"><strong>Windows:</strong> download and run the <code>.exe</code> directly.</div>
-        <div class="run-note"><strong>Linux:</strong> run <code>chmod +x Wildcraft-1.2.0-linux.AppImage</code>, then launch it with <code>./Wildcraft-1.2.0-linux.AppImage</code></div>
+        <div class="run-note"><strong>Linux:</strong> run <code>chmod +x Wildcraft-26.8.1-linux.AppImage</code>, then launch it with <code>./Wildcraft-26.8.1-linux.AppImage</code></div>
       </div>
     </div>
   </div>
