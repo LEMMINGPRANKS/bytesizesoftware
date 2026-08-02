@@ -22,7 +22,7 @@ import {
   loadMpSave, saveMpSave,
 } from "./save/saveManager.js";
 import { getSettings, saveSettings, applySettings, DEFAULTS } from "./save/settings.js";
-const { connect, hostRoom, joinRoom, leaveRoom, callbacks, isConnected, isInRoom, sendBlockEdit, sendPlayerState, sendChat, sendWorldDump, actorName, getLocalActorNr, getLocalName } = window;
+const { connect, hostRoom, joinRoom, leaveRoom, callbacks, isConnected, isInRoom, sendBlockEdit, sendPistonState, sendPlayerState, sendChat, sendWorldDump, actorName, getLocalActorNr, getLocalName } = window;
 
 const $ = (s) => document.querySelector(s);
 
@@ -439,6 +439,7 @@ async function main() {
           : [0, 0, look.z > 0 ? 1 : -1];
       }
       world.addPiston(px, py, pz, facing, sel === B.STICKY_PISTON);
+      sendPistonState(px, py, pz, facing, sel === B.STICKY_PISTON);
     }
     inv.remove(sel, 1);
     place();
@@ -1736,6 +1737,14 @@ async function main() {
     mpRefreshPlayers();
   };
   callbacks.onRemoteBlockEdit = (edit) => { mpApplyRemoteBlock(edit); };
+  callbacks.onRemotePistonState = (st) => {
+    if (!world || !st) return;
+    const id = world.getBlock(st.x, st.y, st.z);
+    if (id === B.PISTON || id === B.STICKY_PISTON) {
+      world.addPiston(st.x, st.y, st.z, [st.fx | 0, st.fy | 0, st.fz | 0], !!st.sticky);
+      world._dirtyChunkAt(st.x, st.z);
+    }
+  };
   callbacks.onRemotePlayerState = (st, actorNr) => { applyRemotePlayerState(actorNr, st); };
   callbacks.onRemoteChat = (text, actorNr) => {
     if (typeof text !== "string" || !text.trim()) return;

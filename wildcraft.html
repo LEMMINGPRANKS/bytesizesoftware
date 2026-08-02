@@ -58878,6 +58878,7 @@ const EVENT_CODES = {
   PLAYER_STATE: 2,
   CHAT: 3,
   WORLD_DUMP: 4,
+  PISTON_STATE: 5,
 };
 
 let client = null;
@@ -58895,6 +58896,7 @@ const callbacks = {
   onRemotePlayerState: null,    // ({x,y,z,yaw,pitch}, playerId)
   onRemoteChat: null,           // (text, playerId)
   onRemoteWorldDump: null,      // ({ entries: [{x,y,z,id}], done: bool }, playerId)
+  onRemotePistonState: null,    // ({x,y,z,fx,fy,fz,sticky}, playerId)
   onError: null,                // (msg)
   onStatus: null,               // (msg) — diagnostic state chatter
 };
@@ -59031,6 +59033,20 @@ function sendBlockEdit(x, y, z, id) {
   if (!inRoom) return;
   client.raiseEvent(EVENT_CODES.BLOCK_EDIT, { x, y, z, id });
 }
+// Pistons need their facing direction broadcast separately because block IDs
+// alone don't carry orientation. Receiver registers the piston via world.addPiston.
+function sendPistonState(x, y, z, facing, sticky) {
+  if (!inRoom) return;
+  try {
+    client.raiseEvent(EVENT_CODES.PISTON_STATE, {
+      x, y, z,
+      fx: facing[0] | 0, fy: facing[1] | 0, fz: facing[2] | 0,
+      sticky: !!sticky,
+    });
+  } catch (e) {
+    callbacks.onError?.(`Piston state send failed: ${e?.message || e}`);
+  }
+}
 function sendPlayerState(pos, yaw, pitch) {
   if (!inRoom) return;
   client.raiseEvent(EVENT_CODES.PLAYER_STATE, {
@@ -59082,6 +59098,8 @@ function handleEvent(code, data, actorNr) {
       callbacks.onRemoteChat?.(data?.text, actorNr);
     } else if (code === EVENT_CODES.WORLD_DUMP) {
       callbacks.onRemoteWorldDump?.(data, actorNr);
+    } else if (code === EVENT_CODES.PISTON_STATE) {
+      callbacks.onRemotePistonState?.(data, actorNr);
     }
   } catch (e) {
     // Defensive: a malformed payload or missing callback shouldn't take down
@@ -59101,6 +59119,7 @@ function handleEvent(code, data, actorNr) {
   window.joinRoom = typeof joinRoom !== 'undefined' ? joinRoom : undefined;
   window.leaveRoom = typeof leaveRoom !== 'undefined' ? leaveRoom : undefined;
   window.sendBlockEdit = typeof sendBlockEdit !== 'undefined' ? sendBlockEdit : undefined;
+  window.sendPistonState = typeof sendPistonState !== 'undefined' ? sendPistonState : undefined;
   window.sendPlayerState = typeof sendPlayerState !== 'undefined' ? sendPlayerState : undefined;
   window.sendChat = typeof sendChat !== 'undefined' ? sendChat : undefined;
   window.sendWorldDump = typeof sendWorldDump !== 'undefined' ? sendWorldDump : undefined;
@@ -59110,7 +59129,7 @@ function handleEvent(code, data, actorNr) {
 // === js/main.js ===
 (function () {
 // Entry: wire renderer → world → player → mining/placing → crafting → HUD.
-const { connect, hostRoom, joinRoom, leaveRoom, callbacks, isConnected, isInRoom, sendBlockEdit, sendPlayerState, sendChat, sendWorldDump, actorName, getLocalActorNr, getLocalName } = window;
+const { connect, hostRoom, joinRoom, leaveRoom, callbacks, isConnected, isInRoom, sendBlockEdit, sendPistonState, sendPlayerState, sendChat, sendWorldDump, actorName, getLocalActorNr, getLocalName } = window;
 
 const $ = (s) => document.querySelector(s);
 
@@ -59527,6 +59546,7 @@ async function main() {
           : [0, 0, look.z > 0 ? 1 : -1];
       }
       world.addPiston(px, py, pz, facing, sel === B.STICKY_PISTON);
+      sendPistonState(px, py, pz, facing, sel === B.STICKY_PISTON);
     }
     inv.remove(sel, 1);
     place();
@@ -60824,6 +60844,14 @@ async function main() {
     mpRefreshPlayers();
   };
   callbacks.onRemoteBlockEdit = (edit) => { mpApplyRemoteBlock(edit); };
+  callbacks.onRemotePistonState = (st) => {
+    if (!world || !st) return;
+    const id = world.getBlock(st.x, st.y, st.z);
+    if (id === B.PISTON || id === B.STICKY_PISTON) {
+      world.addPiston(st.x, st.y, st.z, [st.fx | 0, st.fy | 0, st.fz | 0], !!st.sticky);
+      world._dirtyChunkAt(st.x, st.z);
+    }
+  };
   callbacks.onRemotePlayerState = (st, actorNr) => { applyRemotePlayerState(actorNr, st); };
   callbacks.onRemoteChat = (text, actorNr) => {
     if (typeof text !== "string" || !text.trim()) return;

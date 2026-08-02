@@ -23,6 +23,7 @@ const EVENT_CODES = {
   PLAYER_STATE: 2,
   CHAT: 3,
   WORLD_DUMP: 4,
+  PISTON_STATE: 5,
 };
 
 let client = null;
@@ -40,6 +41,7 @@ export const callbacks = {
   onRemotePlayerState: null,    // ({x,y,z,yaw,pitch}, playerId)
   onRemoteChat: null,           // (text, playerId)
   onRemoteWorldDump: null,      // ({ entries: [{x,y,z,id}], done: bool }, playerId)
+  onRemotePistonState: null,    // ({x,y,z,fx,fy,fz,sticky}, playerId)
   onError: null,                // (msg)
   onStatus: null,               // (msg) — diagnostic state chatter
 };
@@ -176,6 +178,20 @@ export function sendBlockEdit(x, y, z, id) {
   if (!inRoom) return;
   client.raiseEvent(EVENT_CODES.BLOCK_EDIT, { x, y, z, id });
 }
+// Pistons need their facing direction broadcast separately because block IDs
+// alone don't carry orientation. Receiver registers the piston via world.addPiston.
+export function sendPistonState(x, y, z, facing, sticky) {
+  if (!inRoom) return;
+  try {
+    client.raiseEvent(EVENT_CODES.PISTON_STATE, {
+      x, y, z,
+      fx: facing[0] | 0, fy: facing[1] | 0, fz: facing[2] | 0,
+      sticky: !!sticky,
+    });
+  } catch (e) {
+    callbacks.onError?.(`Piston state send failed: ${e?.message || e}`);
+  }
+}
 export function sendPlayerState(pos, yaw, pitch) {
   if (!inRoom) return;
   client.raiseEvent(EVENT_CODES.PLAYER_STATE, {
@@ -227,6 +243,8 @@ function handleEvent(code, data, actorNr) {
       callbacks.onRemoteChat?.(data?.text, actorNr);
     } else if (code === EVENT_CODES.WORLD_DUMP) {
       callbacks.onRemoteWorldDump?.(data, actorNr);
+    } else if (code === EVENT_CODES.PISTON_STATE) {
+      callbacks.onRemotePistonState?.(data, actorNr);
     }
   } catch (e) {
     // Defensive: a malformed payload or missing callback shouldn't take down
