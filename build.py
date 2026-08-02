@@ -28,6 +28,8 @@ MODULES = [
     "js/gameplay/crafting.js",
     "js/entities/cow.js",
     "js/entities/fish.js",
+    "js/entities/zombie.js",
+    "js/entities/skeleton.js",
     "js/entities/moongolem.js",
     "js/gameplay/mobs.js",
     "js/ui/hud.js",

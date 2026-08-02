@@ -580,11 +580,23 @@ async function main() {
     const cow = mobs.raycast(origin, dir, CONFIG.mining.range + 1);
     if (cow) {
       const wasAlive = cow.alive;
-      cow.hit(cow.isFish ? 4 : 4, player.pos);
+      // Tool-tier damage: sword-equivalent = held pickaxe/shovel of any tier.
+      const carried = getCarried();
+      const carriedDef = carried !== null ? BLOCKS[carried] : null;
+      const dmg = carriedDef?.toolTier ? 4 + carriedDef.toolTier * 2 : 4;
+      cow.hit(cow.isFish ? 4 : dmg, player.pos);
       if (typeof window.hurt === "function") window.hurt();
       if (wasAlive && !cow.alive) {
         if (cow.isFish) {
           inv.add(B.RAW_FISH, 1);
+        } else if (cow.isHostile) {
+          // Zombies drop rotten flesh (0-2), skeletons drop bone (0-1).
+          if (cow.constructor && cow.constructor.name === "Skeleton") {
+            if (Math.random() < 0.7) inv.add(B.BONE, 1);
+          } else {
+            const drop = Math.random() * 3 | 0;
+            if (drop > 0) inv.add(B.ROTTEN_FLESH, drop);
+          }
         } else {
           const drop = 2 + (Math.random() * 2 | 0);
           inv.add(B.RAW_BEEF, drop);
@@ -797,6 +809,20 @@ async function main() {
     world._bossAttackCallback = () => {
       if (creativeMode) return;
       hunger = Math.max(0, hunger - 3);
+      hud.setHunger(hunger);
+      if (typeof window.hurt === "function") window.hurt();
+      if (hunger <= 0) {
+        player.spawn();
+        hunger = 6;
+        hud.setHunger(hunger);
+      }
+    };
+    // Hostile mob attack callback: zombie/skeleton hit → drain hunger by
+    // the mob's damage value (default 2). Same rules as boss (creative immune,
+    // respawn at 0 hunger).
+    world._hostileAttackCallback = (dmg = 2) => {
+      if (creativeMode) return;
+      hunger = Math.max(0, hunger - dmg);
       hud.setHunger(hunger);
       if (typeof window.hurt === "function") window.hurt();
       if (hunger <= 0) {
@@ -1088,6 +1114,7 @@ async function main() {
     B.GRANITE, B.MARBLE, B.BASALT,
     B.CRYSTAL, B.GLOW_MUSHROOM,
     B.PISTON, B.STICKY_PISTON,
+    B.ROTTEN_FLESH, B.BONE,
     B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE, B.PLATINUM_ORE,
     B.PICKAXE_WOOD, B.PICKAXE_STONE, B.PICKAXE_IRON, B.PICKAXE_DIAMOND, B.PICKAXE_PLATINUM,
     B.SHOVEL_WOOD, B.SHOVEL_STONE, B.SHOVEL_IRON, B.SHOVEL_DIAMOND, B.SHOVEL_PLATINUM,
@@ -1579,6 +1606,7 @@ async function main() {
     if (input.mouseJust[2] || input.justPressed.has("KeyQ")) placeBlock();
     if (input.mouseJust[1]) pickBlock();
 
+    mobs.dayFactor = dayNight.dayFactor();
     mobs.update(dt, player.pos);
 
     // Tick the boss if it exists; clean up once the death anim finishes.

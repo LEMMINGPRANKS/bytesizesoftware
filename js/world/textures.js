@@ -879,6 +879,30 @@ function drawTexture(id, face) {
       ctx.fillRect(SIZE - 4, SIZE - 4, 1, 1);
       break;
     }
+    case B.ROTTEN_FLESH: {
+      // Sickly pink-red meat with dark patches + a couple of maggots.
+      fillNoise(ctx, hexToRgb("#7a4a4a"), 24);
+      ctx.fillStyle = "#4a2020";
+      for (let i = 0; i < 5; i++) {
+        ctx.fillRect(Math.random() * SIZE, Math.random() * SIZE, 2 + Math.random() * 3, 2);
+      }
+      // Maggot specks (cream).
+      ctx.fillStyle = "#e8e0c0";
+      ctx.fillRect(4, 11, 1, 1);
+      ctx.fillRect(11, 6, 1, 1);
+      break;
+    }
+    case B.BONE: {
+      // Off-white with a couple of grey pits + a thin shadow line.
+      fillNoise(ctx, hexToRgb("#e8e0c8"), 8);
+      ctx.fillStyle = "#807050";
+      ctx.fillRect(3, 4, 1, 1);
+      ctx.fillRect(11, 9, 1, 1);
+      ctx.fillRect(7, 12, 1, 1);
+      ctx.strokeStyle = "rgba(80,70,50,0.4)";
+      ctx.beginPath(); ctx.moveTo(2, 8); ctx.lineTo(SIZE - 2, 8); ctx.stroke();
+      break;
+    }
     default: fillNoise(ctx, base, 20); break;
   }
   const tex = new THREE.CanvasTexture(c);

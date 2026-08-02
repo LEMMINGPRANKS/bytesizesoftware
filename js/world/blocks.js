@@ -44,6 +44,8 @@ export const B = {
   PISTON: 69,
   STICKY_PISTON: 70,
   PISTON_HEAD: 71,
+  ROTTEN_FLESH: 72,
+  BONE: 73,
 };
 
 export const BLOCKS = {
@@ -121,6 +123,8 @@ export const BLOCKS = {
   [B.PISTON]: { name: "piston", solid: true, hardness: 1.5, color: "#9c7a4a", interactive: true, piston: true, receiver: true },
   [B.STICKY_PISTON]: { name: "sticky_piston", solid: true, hardness: 1.5, color: "#4e8050", interactive: true, piston: true, sticky: true, receiver: true },
   [B.PISTON_HEAD]: { name: "piston_head", solid: false, hardness: 0.5, color: "#c8b070", transparent: true, decor: true, pistonHead: true },
+  [B.ROTTEN_FLESH]: { name: "rotten_flesh", solid: false, hardness: 0.1, color: "#7a4a4a", item: true, food: 1 },
+  [B.BONE]: { name: "bone", solid: false, hardness: 0.1, color: "#e8e0c8", item: true },
 };
 
 export const isSolid = (id) => id !== B.AIR && !!BLOCKS[id]?.solid;
